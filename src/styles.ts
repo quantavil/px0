@@ -259,7 +259,8 @@ export const BASE_CSS = `
   .badge-encrypted { color: var(--green); background: var(--green-fill); border-color: var(--green-line); }
   .badge-public    { color: var(--blue);  background: var(--blue-fill);  border-color: var(--blue-line); }
   .badge-ttl       { color: var(--amber); background: var(--amber-fill); border-color: var(--amber-line); }
-  .badge-burn-once { color: var(--red);   background: var(--red-fill);   border-color: var(--red-line); }
+  .badge-burn-once,
+  .badge-expired   { color: var(--red);   background: var(--red-fill);   border-color: var(--red-line); }
 
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-track { background: transparent; }
@@ -399,6 +400,13 @@ export const MARKDOWN_CSS = `
   .markdown-body pre:hover .code-copy-btn,
   .code-copy-btn:focus-visible { opacity: 1; }
 
+  /* A phone has no hover, so revealing this on :hover meant it was drawn at
+     opacity 0 forever — present and tappable, but invisible. Coarse pointers
+     get it permanently, at a size a thumb can actually hit. */
+  @media (hover: none) {
+    .code-copy-btn { opacity: 0.7; width: 34px; height: 34px; }
+  }
+
   .code-copy-btn:hover {
     color: var(--amber);
     border-color: var(--amber-line);
@@ -537,6 +545,19 @@ export const LANDING_CSS = `
 
   .ttl-option:hover { background: rgba(255, 255, 255, 0.06); color: var(--text); }
   .ttl-option.selected { color: var(--amber); }
+
+  /* Every other row is a duration; this one is a one-shot destructive mode.
+     Rendered identically, it read as "some very short expiry". */
+  .ttl-option[data-ttl="burn"] {
+    color: var(--red);
+    margin-bottom: 0.3rem;
+    padding-bottom: 0.45rem;
+    border-bottom: 1px solid var(--border);
+    border-radius: 5px 5px 0 0;
+  }
+
+  .ttl-option[data-ttl="burn"]:hover { color: var(--red); background: var(--red-fill); }
+  .ttl-option[data-ttl="burn"] .ttl-check { color: var(--red); }
 
   .ttl-check { display: inline-flex; width: 14px; visibility: hidden; color: var(--amber); }
   .ttl-option.selected .ttl-check { visibility: visible; }
@@ -743,6 +764,38 @@ export const LANDING_CSS = `
   .header-share-banner.is-burn #shareUrl { border-color: var(--red-line); }
   #shareUrl:focus { border-color: var(--amber); }
 
+  /* The password only ever existed in the header bar. Copy the link, close the
+     tab, and a zero-knowledge paste is unrecoverable — so the "you're done"
+     row has to carry the password too, not just the URL. */
+  .share-pass-chunk {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-shrink: 0;
+  }
+
+  .share-pass-chunk::before {
+    content: "pass";
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    color: var(--text-muted);
+  }
+
+  #sharePass {
+    width: 9rem;
+    height: var(--control-h);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--green-line);
+    color: var(--green);
+    font-family: var(--mono);
+    font-size: 0.82rem;
+    padding: 0 0.6rem;
+    border-radius: 7px;
+    outline: none;
+  }
+
+  #sharePass:focus { border-color: var(--green); }
+
   @media (max-width: 767px) {
     textarea, .preview-pane { padding: 1.25rem 1rem; }
 
@@ -762,6 +815,8 @@ export const LANDING_CSS = `
     /* The banner is 4 controls wide; let it wrap instead of crushing the URL. */
     .header-share-banner { flex-wrap: wrap; }
     #shareUrl { order: 3; flex-basis: 100%; }
+    .share-pass-chunk { order: 4; }
+    #sharePass { flex: 1; }
 
     .inline-pass-bar.visible { max-width: 170px; }
     .inline-pass-input { width: 100px; }

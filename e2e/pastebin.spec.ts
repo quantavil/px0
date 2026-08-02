@@ -86,6 +86,16 @@ test.describe('px0 E2E Browser Test Suite', () => {
     await expect(page.locator('#output h1')).toHaveText('Top Secret E2EE Note');
     await expect(page.locator('#output code')).toHaveText('super-secret-123');
 
+    // /raw only ever sees ciphertext, so the button must not be offered here —
+    // it used to appear the moment decryption revealed the action bar, handing
+    // the reader `__PX0_ENC__:…`. Download replaces it and works on the
+    // decrypted text.
+    await expect(page.locator('#rawBtn')).toHaveCount(0);
+    const downloadPromise = page.waitForEvent('download');
+    await page.locator('#downloadBtn').click();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toMatch(/^[A-Za-z0-9\-_]{8}\.md$/);
+
     // Open URL without hash fragment -> verify decryption missing key error message
     const urlWithoutHash = fullUrlWithHash.split('#')[0];
     const page2 = await context.newPage();
@@ -217,7 +227,7 @@ func main() {
 
     // First actual view -> Displays paste content and Burned After Read badge
     await page.goto(pasteUrl);
-    await expect(page.locator('.badge-burn-once')).toContainText('Burned After Read');
+    await expect(page.locator('.badge-burn-once')).toContainText('Burned');
     await expect(page.locator('#output h1')).toHaveText('Top Secret Burn Note');
 
     // The paste is already deleted, so Copy Link, View Raw and Delete would all
@@ -226,6 +236,7 @@ func main() {
     await expect(page.locator('#rawBtn')).toHaveCount(0);
     await expect(page.locator('#deleteBtn')).toHaveCount(0);
     await expect(page.locator('#copyContentBtn')).toBeVisible();
+    await expect(page.locator('#downloadBtn')).toBeVisible();
 
     // Second view -> Paste should be destroyed and return 404!
     const secondResponse = await page.goto(pasteUrl);
@@ -252,6 +263,9 @@ func main() {
 
     await page.locator('button[type="submit"]').click();
     await expect(page.locator('#headerShareBanner')).toBeVisible();
+    // Only this string can decrypt the paste — if the banner shows just the URL,
+    // copying it and closing the tab loses the paste for good.
+    await expect(page.locator('#sharePass')).toHaveValue('my-vault-pass-123');
     const passUrl = await page.locator('#shareUrl').inputValue();
     await page.goto(passUrl);
 

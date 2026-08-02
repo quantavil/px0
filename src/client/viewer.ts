@@ -1,4 +1,5 @@
 import { clockSvg, copyIcon, lockIcon } from "../icons";
+import { ENC_PREFIX, PASS_PREFIX } from "../utils";
 import {
   base64UrlToBytes,
   copyToClipboard,
@@ -48,7 +49,14 @@ function startExpiryCountdown() {
   const update = () => {
     const remaining = expiresAtMs - Date.now();
     badge.innerHTML = `${clockSvg} ${formatTimeLeft(remaining)}`;
-    if (remaining <= 0) clearInterval(interval);
+    if (remaining > 0) return;
+    // The countdown used to just stop, leaving an amber "expired" badge over
+    // content that a reload would 404. The text stays on screen — it is already
+    // in this reader's browser and yanking it away helps nobody — but the badge
+    // says plainly that the link is dead now.
+    badge.className = "badge badge-expired";
+    badge.title = "This paste has expired — reloading will no longer find it";
+    clearInterval(interval);
   };
 
   // formatTimeLeft only resolves to minutes, so a 1s tick repainted the badge
@@ -74,22 +82,35 @@ function copyLink() {
   flashCopied(document.getElementById("copyBtn"));
 }
 
+// The readable text of this paste: whatever was decrypted in-browser, or the
+// stored value when it was never encrypted. Never the ciphertext.
+function pasteText(): string {
+  if (window.__PX0_DECRYPTED_TEXT__) return window.__PX0_DECRYPTED_TEXT__;
+  const rawVal = window.__PX0_DATA__?.rawContent || "";
+  const encrypted =
+    rawVal.startsWith(PASS_PREFIX) || rawVal.startsWith(ENC_PREFIX);
+  return encrypted ? "" : rawVal;
+}
+
 function copyContent() {
-  let textToCopy = window.__PX0_DECRYPTED_TEXT__ || "";
-
-  if (!textToCopy) {
-    const rawVal = window.__PX0_DATA__?.rawContent || "";
-    if (
-      rawVal &&
-      !rawVal.startsWith("__PX0_PASS__:") &&
-      !rawVal.startsWith("__PX0_ENC__:")
-    ) {
-      textToCopy = rawVal;
-    }
-  }
-
-  copyToClipboard(textToCopy);
+  copyToClipboard(pasteText());
   flashCopied(document.getElementById("copyContentBtn"));
+}
+
+// Download, not /raw: this works for decrypted E2EE and password pastes, which
+// /raw structurally cannot — it only ever sees the ciphertext.
+function downloadContent() {
+  const text = pasteText();
+  if (!text) return;
+  const url = URL.createObjectURL(
+    new Blob([text], { type: "text/markdown;charset=utf-8" }),
+  );
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${window.location.pathname.slice(1) || "paste"}.md`;
+  a.click();
+  URL.revokeObjectURL(url);
+  flashCopied(document.getElementById("downloadBtn"));
 }
 
 function attachCodeBlockCopyButtons() {
@@ -140,10 +161,8 @@ async function unlockPasswordPaste() {
   };
 
   try {
-    // __PX0_PASS__:salt:iv:ciphertext — split on ":" and take last 3 parts
-    const firstColon = rawContent.indexOf(":");
-    const payload = rawContent.substring(firstColon + 1);
-    const parts = payload.split(":");
+    // __PX0_PASS__:salt:iv:ciphertext
+    const parts = rawContent.slice(PASS_PREFIX.length).split(":");
     if (parts.length < 3) {
       if (passErr) passErr.textContent = "Malformed or corrupted payload!";
       restoreBtn();
@@ -238,6 +257,11 @@ async function initPageViewer() {
     copyContentBtn.addEventListener("click", copyContent);
     copyContentBtn.dataset.bound = "1";
   }
+  const downloadBtn = document.getElementById("downloadBtn");
+  if (downloadBtn && !downloadBtn.dataset.bound) {
+    downloadBtn.addEventListener("click", downloadContent);
+    downloadBtn.dataset.bound = "1";
+  }
 
   if (isPasswordProtected) {
     if (document.getElementById("unlockPass")) {
@@ -312,9 +336,7 @@ async function initPageViewer() {
       ["decrypt"],
     );
 
-    const combinedBytes = base64UrlToBytes(
-      rawContent.replace("__PX0_ENC__:", ""),
-    );
+    const combinedBytes = base64UrlToBytes(rawContent.slice(ENC_PREFIX.length));
     const iv = combinedBytes.slice(0, 12);
     const ciphertext = combinedBytes.slice(12);
 

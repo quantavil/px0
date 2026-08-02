@@ -316,8 +316,10 @@ describe("Hono Security & Route Handlers", () => {
     const firstView = await app.request(`/${data.id}`);
     expect(firstView.status).toBe(200);
     const firstHtml = await firstView.text();
-    expect(firstHtml).toContain("Burned After Read");
+    expect(firstHtml).toContain("Burned");
     expect(firstHtml).toContain("Burn Secret");
+    // Deleted by this very request — no cache may re-serve it.
+    expect(firstView.headers.get("Cache-Control")).toBe("no-store");
 
     // Second view -> Paste has self-destructed! Returns 404
     const secondView = await app.request(`/${data.id}`);
@@ -339,6 +341,8 @@ describe("Hono Security & Route Handlers", () => {
     expect(viewRes.status).toBe(200);
     const htmlText = await viewRes.text();
     expect(htmlText).toContain('data-password="true"');
+    // /raw would hand back the ciphertext, so the button must not be rendered.
+    expect(htmlText).not.toContain('id="rawBtn"');
   });
 
   test("POST /api/paste handles E2EE encrypted payload format correctly", async () => {
@@ -357,6 +361,41 @@ describe("Hono Security & Route Handlers", () => {
     const htmlText = await viewRes.text();
     expect(htmlText).toContain('data-encrypted="true"');
     expect(htmlText).toContain("Decrypting end-to-end encrypted payload");
+    expect(htmlText).not.toContain('id="rawBtn"');
+  });
+
+  test("POST /api/paste accepts a raw text/plain body and answers with a URL", async () => {
+    const res = await app.request("/api/paste?ttl=1d", {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: "# From curl\n\nNo JSON escaping required.",
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("X-Px0-Storage")).toBe("plaintext");
+    const url = (await res.text()).trim();
+    expect(url).toMatch(/^https?:\/\/.+\/[A-Za-z0-9\-_]{8}$/);
+
+    const viewRes = await app.request(`/${url.split("/").pop()}`);
+    expect(viewRes.status).toBe(200);
+    expect(await viewRes.text()).toContain("From curl");
+  });
+
+  test("POST /api/paste validates the ttl query on the raw-body path too", async () => {
+    const res = await app.request("/api/paste?ttl=nonsense", {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: "hello",
+    });
+    expect(res.status).toBe(400);
+  });
+
+  test("Paste routes are noindex, the landing page is not", async () => {
+    const landing = await app.request("/");
+    expect(landing.headers.get("X-Robots-Tag")).toBeNull();
+
+    const paste = await app.request("/some_paste_id");
+    expect(paste.headers.get("X-Robots-Tag")).toBe("noindex, nofollow");
   });
 
   test("GET /nonexistent returns 404 expired paste page", async () => {

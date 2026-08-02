@@ -9,9 +9,11 @@
 - **Zero-Knowledge Password Protection**: Protect any paste with a custom password. Key derivation runs client-side using `PBKDF2` (SHA-256, 600,000 iterations following OWASP recommendations) and `AES-256-GCM`. The server **never sees or stores** your password.
 - **Zero-Knowledge E2EE**: Submissions are encrypted client-side using Web Crypto API (`AES-256-GCM`) before reaching the server. The secret decryption key stays in the URL hash fragment (`/#key`) and is **never sent to the server**.
 - **Bundled TypeScript Client**: Client-side logic ([src/client/](file:///home/quantavil/Documents/Project/px0/src/client/)) is written in 100% typed TypeScript and minified via Bun into static JS assets served at `/static/*.js`. Eliminates raw inline script template strings and prevents script-breakout XSS by design.
-- **Burn-After-Read Self-Destruct**: Pastes configured with `Burn After Read` delete automatically from memory/KV immediately upon the first view. Because the paste is already gone by the time the page renders, the viewer omits Copy Link, View Raw and Delete rather than offering three controls that would all fail.
+- **Burn-After-Read Self-Destruct**: Pastes configured with `Burn once` delete automatically from memory/KV immediately upon the first view. Because the paste is already gone by the time the page renders, the viewer omits Copy Link, View Raw and Delete rather than offering three controls that would all fail. A burn paste nobody ever opens expires after 24 hours.
+- **Download as Markdown**: Every paste view offers a Download button that saves the content as `<id>.md`. Unlike `/raw`, it works on password and E2EE pastes, because it writes the text that was decrypted **in the browser** — `/raw` only ever sees ciphertext, so it is not offered for encrypted pastes at all.
+- **CLI-Friendly Creation**: `POST /api/paste` accepts a raw body as well as JSON, so a file can be piped straight from a terminal without hand-escaping it into JSON. See [HTTP API](#http-api). Note that pastes created this way are **not encrypted** — all the crypto runs in the browser client.
 - **Flexible Expiration Options**: Choose custom TTLs from a native-feeling, SVG-styled dropdown in the UI header:
-  - `Burn After Read`
+  - `Burn once`
   - `15 Minutes` | `30 Minutes`
   - `1 Hour` | `3 Hours` | `6 Hours` | `12 Hours`
   - `1 Day` | `3 Days` | `7 Days` | `15 Days` | `30 Days` (Default)
@@ -22,7 +24,7 @@
 - **SVG Icon System**: All UI icons (lock, globe, flame, clock, trash, chevron, check) are inline SVGs in `src/icons.ts` — no emoji or icon-font dependencies. Each icon is defined once and sized by its container, so the same glyph can't render at three different sizes.
 - **Keyboard & Screen-Reader Support**: Every control is operable without a mouse — the TTL listbox has full arrow-key/Home/End/Enter/Escape navigation with focus return, icon-only buttons carry `aria-label`, toggles report `aria-pressed`, and there's one global `:focus-visible` treatment. Honors `prefers-reduced-motion`.
 - **Lightweight & Fast**: Sub-10ms response times running on Cloudflare Workers edge nodes.
-- **Hardened Security**: Strict `Content-Security-Policy`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, and rate limiting on both the submit and delete endpoints (30 requests / minute per IP).
+- **Hardened Security**: Strict `Content-Security-Policy`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `X-Robots-Tag: noindex, nofollow` on every path but the landing page, `Cache-Control: no-store` on paste responses, and rate limiting on both the submit and delete endpoints (30 requests / minute per IP).
 
 ---
 
@@ -35,7 +37,7 @@
 - **Markdown Engine**: [marked](https://marked.js.org)
 - **Syntax Highlighter**: [sugar-high](https://github.com/huozhi/sugar-high)
 - **Encryption**: Web Crypto API (`PBKDF2` 600,000 iterations + `AES-GCM` 256-bit)
-- **Testing**: [Playwright](https://playwright.dev) (13 E2E browser tests) & Bun Test (35 Unit/Integration tests)
+- **Testing**: [Playwright](https://playwright.dev) (13 E2E browser tests) & Bun Test (38 Unit/Integration tests)
 
 ---
 
@@ -80,7 +82,7 @@ bun run check
 # Lint & format code using Biome
 bun run lint
 
-# Run Bun unit & integration test suite (35 tests)
+# Run Bun unit & integration test suite (38 tests)
 bun run test
 
 # Run Playwright E2E browser test suite (Headless - 13 tests)
@@ -149,7 +151,18 @@ The Worker is served at `https://px0.<account-subdomain>.workers.dev` (e.g. `htt
 
 ## HTTP API
 
-- `POST /api/paste` — `{ "content": string, "ttl": "burn"|"15m"|...|"30d" }` → `{ "id": string }`. Stores the paste in KV (or memory fallback) with an expiration TTL.
+- `POST /api/paste` — two request shapes:
+  - `Content-Type: application/json` → `{ "content": string, "ttl": "burn"|"15m"|...|"30d" }` → `{ "id": string }`. This is what the browser client sends, after encrypting `content` locally.
+  - Any other content type → the **body is the paste** and the TTL comes from `?ttl=`. Responds with the bare URL and `X-Px0-Storage: plaintext`.
+
+    ```bash
+    curl -sX POST --data-binary @notes.md "https://px0.iyzi.workers.dev/api/paste?ttl=1d"
+    # → https://px0.iyzi.workers.dev/AbC-1x_9
+
+    cat build.log | curl -sX POST --data-binary @- "https://px0.iyzi.workers.dev/api/paste?ttl=burn"
+    ```
+
+    All encryption in px0 happens in the browser, so a paste created this way is stored **unencrypted** — the opposite of the web UI's default. Use it for logs and diffs, not secrets.
 - `DELETE /api/paste/:id` — permanently deletes a paste, regardless of its TTL. → `{ "ok": true }`.
 - `GET /raw/:id` — returns the plaintext payload (`text/plain`); burns-after-read pastes are consumed.
 - `GET /:id` — renders the HTML viewer page with live expiry countdown, status badge, and delete footer.
@@ -164,8 +177,9 @@ The Worker is served at `https://px0.<account-subdomain>.workers.dev` (e.g. `htt
    - On the view page, entering the password derives the key in the browser and decrypts the content client-side. Invalid passwords return `Incorrect password — check it and try again.`
 2. **Zero-Knowledge Key Storage**:
    - For hash-based E2EE (`/#key`), the 256-bit raw key is Base64URL-encoded and attached strictly to the URL fragment (`/#key`), which HTTP GET requests never transmit.
+   - The password is shown in the share banner alongside the link when a paste is created. Store it then: zero-knowledge means a lost password is unrecoverable by anyone, px0 included.
 3. **Burn-After-Read Execution**:
-   - Pastes marked with `burn` delete immediately upon the first view request (`/:id` or `/raw/:id`).
+   - Pastes marked with `burn` delete immediately upon the first view request (`/:id` or `/raw/:id`); one never viewed expires after 24 hours.
 4. **Post-Parse Output Sanitization**:
    - On the server, raw Markdown is parsed by `marked` first, then the rendered HTML output is sanitized via `sanitizeOutputHtml` to strip inline event attributes (`on*`) and malicious URI schemes (`javascript:`, `vbscript:`, `data:`).
 5. **CSP Hardening**:

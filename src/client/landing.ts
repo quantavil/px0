@@ -6,6 +6,7 @@ import {
   lockIcon,
   plusIcon,
 } from "../icons";
+import { ENC_PREFIX, MAX_PASTE_BYTES, PASS_PREFIX } from "../utils";
 import {
   bytesToBase64Url,
   copyToClipboard,
@@ -358,10 +359,19 @@ function initLanding() {
       const saveBtn = document.getElementById(
         "saveBtn",
       ) as HTMLButtonElement | null;
+      const saveBtnLabel = saveBtn?.querySelector("span");
+
+      // Deriving a password key is 600k PBKDF2 rounds — about two seconds on
+      // this machine, during which Save only dimmed. The unlock button already
+      // says "Unlocking…"; the create side needs the same honesty.
+      const setSaveBusy = (label: string | null) => {
+        if (saveBtn) saveBtn.disabled = label !== null;
+        if (saveBtnLabel) saveBtnLabel.textContent = label ?? "Save";
+      };
 
       const fail = (msg: string) => {
         if (saveError) saveError.textContent = msg;
-        if (saveBtn) saveBtn.disabled = false;
+        setSaveBusy(null);
       };
 
       if (saveError) saveError.textContent = "";
@@ -370,12 +380,13 @@ function initLanding() {
         textarea.focus();
         return;
       }
-      if (saveBtn) saveBtn.disabled = true;
 
       const text = textarea.value;
       const isE2ee = e2eeToggle.checked;
       const selectedTtl = ttlInput ? ttlInput.value : "30d";
       const passwordVal = currentPassword();
+
+      setSaveBusy(passwordVal || isE2ee ? "Encrypting…" : "Saving…");
 
       let payload = text;
       let secretKeyBase64 = "";
@@ -391,7 +402,7 @@ function initLanding() {
           encodedText,
         );
 
-        payload = `__PX0_PASS__:${bytesToBase64Url(salt)}:${bytesToBase64Url(iv)}:${bytesToBase64Url(new Uint8Array(ciphertext))}`;
+        payload = `${PASS_PREFIX}${bytesToBase64Url(salt)}:${bytesToBase64Url(iv)}:${bytesToBase64Url(new Uint8Array(ciphertext))}`;
       } else if (isE2ee) {
         const cryptoKey = await crypto.subtle.generateKey(
           { name: "AES-GCM", length: 256 },
@@ -413,7 +424,20 @@ function initLanding() {
         const combined = new Uint8Array(iv.length + ciphertext.byteLength);
         combined.set(iv, 0);
         combined.set(new Uint8Array(ciphertext), iv.length);
-        payload = `__PX0_ENC__:${bytesToBase64Url(combined)}`;
+        payload = `${ENC_PREFIX}${bytesToBase64Url(combined)}`;
+      }
+
+      // Measured on the final payload, not the typed text: base64 makes an
+      // encrypted paste ~35% larger, so the server's limit bites at a size the
+      // editor never showed. Checking here costs one encode and saves uploading
+      // several megabytes just to be told 413.
+      if (new TextEncoder().encode(payload).byteLength > MAX_PASTE_BYTES) {
+        fail(
+          isE2ee || passwordVal
+            ? "Too large — the 5MB limit applies after encryption, which adds about 35%."
+            : "Too large — pastes are capped at 5MB.",
+        );
+        return;
       }
 
       let res: Response;
@@ -440,7 +464,7 @@ function initLanding() {
 
       const data = (await res.json()) as { id: string };
       if (data.id) {
-        if (saveBtn) saveBtn.disabled = false;
+        setSaveBusy(null);
 
         const shareUrl = `/${data.id}${
           secretKeyBase64 && passwordVal.length === 0
@@ -451,7 +475,7 @@ function initLanding() {
         // Every creation flow (burn, password, E2EE, TTL) shows the same share
         // overlay instead of redirecting. Keeps the UX consistent, and a burn
         // paste is never consumed by the creator's own redirect.
-        showShareLink(shareUrl, selectedTtl === "burn");
+        showShareLink(shareUrl, selectedTtl === "burn", passwordVal);
       }
     });
   }
@@ -462,10 +486,18 @@ function initLanding() {
 // applied `.share-overlay` (position: fixed; inset: 0; backdrop-filter: blur),
 // which turned this into a full-screen sheet that blurred and blocked the
 // entire editor behind it.
-function showShareLink(url: string, isBurn: boolean) {
+function showShareLink(url: string, isBurn: boolean, password = "") {
   const fullUrl = window.location.origin + url;
   const icon = isBurn ? flameSvg : linkIcon;
   const title = isBurn ? "Burn paste ready" : "Paste created";
+  // Nothing but this string can ever decrypt the paste — not px0, not the
+  // server. If the creator copies only the link and leaves, it is gone.
+  const passChunk = password
+    ? `<span class="share-pass-chunk">
+        <input type="text" id="sharePass" readonly value="${password.replace(/"/g, "&quot;")}" aria-label="Paste password — store it now, it cannot be recovered">
+        <button type="button" id="copySharePassBtn" class="btn-action" title="Copy password" aria-label="Copy password">${copyIcon}</button>
+      </span>`
+    : "";
 
   document.getElementById("headerShareBanner")?.remove();
 
@@ -475,6 +507,7 @@ function showShareLink(url: string, isBurn: boolean) {
   banner.innerHTML = `
     <span class="share-banner-badge">${icon} ${title}</span>
     <input type="text" id="shareUrl" readonly value="${fullUrl}" aria-label="Share link">
+    ${passChunk}
     <button type="button" id="copyShareBtn" class="btn-save" title="Copy link to clipboard">
       ${copyIcon}
       <span id="copyShareLabel">Copy Link</span>
@@ -506,6 +539,14 @@ function showShareLink(url: string, isBurn: boolean) {
     setTimeout(() => {
       if (copyLabel) copyLabel.textContent = "Copy Link";
     }, 2000);
+  });
+
+  const copyPassBtn = document.getElementById(
+    "copySharePassBtn",
+  ) as HTMLButtonElement | null;
+  copyPassBtn?.addEventListener("click", () => {
+    copyToClipboard(password);
+    flashCopied(copyPassBtn);
   });
 
   document.getElementById("createNewBtn")?.addEventListener("click", () => {

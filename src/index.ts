@@ -9,6 +9,7 @@ import {
   chevronDownIcon,
   clockSvg,
   copyIcon,
+  downloadIcon,
   faviconSvg,
   flameSvg,
   globeSvg,
@@ -143,6 +144,10 @@ app.use("*", async (c, next) => {
   c.header("X-Content-Type-Options", "nosniff");
   c.header("Referrer-Policy", "no-referrer");
   c.header("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  // Pastes are unlisted, not secret-by-obscurity — but nothing stopped a crawler
+  // indexing one the moment its link appeared in a public channel. The landing
+  // page is the only thing here that wants to be findable.
+  if (c.req.path !== "/") c.header("X-Robots-Tag", "noindex, nofollow");
   c.header(
     "Content-Security-Policy",
     "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none';",
@@ -213,7 +218,7 @@ app.get("/", (c) => {
                   ${raw(chevronDownIcon)}
                 </button>
                 <ul class="ttl-menu" id="ttlMenu" role="listbox" aria-label="Paste Expiration Mode" hidden>
-                  <li class="ttl-option" role="option" data-ttl="burn" aria-selected="false"><span class="ttl-check">${raw(checkIcon)}</span>Burn After Read</li>
+                  <li class="ttl-option" role="option" data-ttl="burn" aria-selected="false" title="Deletes itself on the first view. If nobody opens it, it expires after 24 hours."><span class="ttl-check">${raw(checkIcon)}</span>Burn once</li>
                   <li class="ttl-option" role="option" data-ttl="15m" aria-selected="false"><span class="ttl-check">${raw(checkIcon)}</span>15 Minutes</li>
                   <li class="ttl-option" role="option" data-ttl="30m" aria-selected="false"><span class="ttl-check">${raw(checkIcon)}</span>30 Minutes</li>
                   <li class="ttl-option" role="option" data-ttl="1h" aria-selected="false"><span class="ttl-check">${raw(checkIcon)}</span>1 Hour</li>
@@ -276,14 +281,26 @@ app.post("/api/paste", async (c) => {
     return c.json({ error: "Payload exceeds 5MB limit" }, 413);
   }
 
-  let body: { content?: unknown; ttl?: unknown };
-  try {
-    body = await c.req.json();
-  } catch {
-    return c.json({ error: "Invalid JSON body" }, 400);
-  }
+  // The browser posts JSON; a terminal posts the file. Requiring JSON meant
+  // `curl` users had to hand-escape newlines and quotes out of the very
+  // markdown they were pasting.
+  const isJson = c.req.header("content-type")?.includes("application/json");
 
-  const { content, ttl } = body || {};
+  let content: unknown;
+  let ttl: unknown;
+
+  if (isJson) {
+    let body: { content?: unknown; ttl?: unknown };
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: "Invalid JSON body" }, 400);
+    }
+    ({ content, ttl } = body || {});
+  } else {
+    content = await c.req.text();
+    ttl = c.req.query("ttl");
+  }
 
   if (typeof content !== "string" || content.trim().length === 0) {
     return c.json({ error: "Content required" }, 400);
@@ -312,7 +329,15 @@ app.post("/api/paste", async (c) => {
     setInMemoryPaste(id, storedPayload, ttlSeconds);
   }
 
-  return c.json({ id });
+  // A terminal wants something pipeable, so the raw-body path answers with the
+  // bare URL. The header states the security posture the browser UI shows as a
+  // badge: nothing posted this way is encrypted — all the crypto lives in
+  // landing.ts, and curl has none of it.
+  return isJson
+    ? c.json({ id })
+    : c.text(`${new URL(c.req.url).origin}/${id}\n`, 200, {
+        "X-Px0-Storage": "plaintext",
+      });
 });
 
 // 3. Delete Paste API (instant, regardless of TTL)
@@ -429,7 +454,7 @@ app.get("/:id", async (c) => {
               ${raw(brandIcon)}
             </a>
             ${expiresAtMs !== undefined ? html`<span class="badge badge-ttl" id="expiryBadge" title="Time remaining until this paste expires">${raw(clockSvg)} ${ttlLabel}</span>` : ""}
-            ${isBurnAfterRead ? html`<span class="badge badge-burn-once" title="This paste self-destructed on view!">${raw(flameSvg)} Burned After Read</span>` : ""}
+            ${isBurnAfterRead ? html`<span class="badge badge-burn-once" title="This paste self-destructed on view!">${raw(flameSvg)} Burned</span>` : ""}
           </div>
 
           <div class="nav-links">
@@ -444,7 +469,16 @@ app.get("/:id", async (c) => {
                   : html`<button type="button" class="btn-action" id="copyBtn" title="Copy Link" aria-label="Copy Link">${raw(linkIcon)}</button>`
               }
               <button type="button" class="btn-action" id="copyContentBtn" title="Copy Content" aria-label="Copy Content">${raw(copyIcon)}</button>
-              ${isBurnAfterRead ? "" : html`<a href="/raw/${id}" target="_blank" rel="noopener" class="btn-action" id="rawBtn" title="View Raw" aria-label="View Raw">${raw(rawIcon)}</a>`}
+              <button type="button" class="btn-action" id="downloadBtn" title="Download as .md" aria-label="Download as Markdown">${raw(downloadIcon)}</button>
+              ${
+                // /raw serves whatever is in storage. For an encrypted paste that
+                // is the ciphertext, so the button was handing the reader
+                // `__PX0_ENC__:aGVsbG8…` right after they had successfully
+                // decrypted the page. Download covers that case instead.
+                isBurnAfterRead || isEncrypted || isPasswordProtected
+                  ? ""
+                  : html`<a href="/raw/${id}" target="_blank" rel="noopener" class="btn-action" id="rawBtn" title="View Raw" aria-label="View Raw">${raw(rawIcon)}</a>`
+              }
             </div>
           </div>
         </header>
@@ -479,6 +513,11 @@ app.get("/:id", async (c) => {
       </body>
       </html>
     `,
+    200,
+    // The one response in the app that must never be re-served: a burn paste is
+    // deleted by this very request, so any cache holding onto the HTML would
+    // hand out content that no longer exists in storage.
+    { "Cache-Control": "no-store" },
   );
 });
 
@@ -504,6 +543,7 @@ app.get("/raw/:id", async (c) => {
   return c.text(rawContent, 200, {
     "Content-Type": "text/plain; charset=utf-8",
     "X-Content-Type-Options": "nosniff",
+    "Cache-Control": "no-store",
   });
 });
 
