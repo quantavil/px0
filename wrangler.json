@@ -1,0 +1,12 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "px0",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-01-01",
+  "kv_namespaces": [
+    {
+      "binding": "PASTES_KV",
+      "id": "e868e47dfd544e4f893f011fb6cbe123"
+    }
+  ]
+}

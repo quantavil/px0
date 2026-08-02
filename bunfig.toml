@@ -1,0 +1,2 @@
+[test]
+match = ["test/**/*.test.ts"]

@@ -1,0 +1,6 @@
+node_modules
+.wrangler
+dist
+.env
+test-results
+playwright-report
