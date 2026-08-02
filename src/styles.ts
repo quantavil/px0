@@ -698,9 +698,13 @@ export const LANDING_CSS = `
   /* Share banner: a real row in the document flow directly under the header.
      It must never be position:fixed — that is what turned it into a modal
      that blurred and blocked the whole editor. */
+  /* One row at every width. The URL takes whatever space the two buttons on
+     the right don't need, so the link stays readable instead of being
+     banished to a second row below the controls. */
   .header-share-banner {
     display: flex;
     align-items: center;
+    justify-content: flex-end;
     gap: 0.75rem;
     width: 100%;
     padding: 0.6rem 1.25rem;
@@ -739,6 +743,24 @@ export const LANDING_CSS = `
   .header-share-banner.is-burn #shareUrl { border-color: var(--red-line); }
   #shareUrl:focus { border-color: var(--amber); }
 
+  /* Below 480px the "Copy Link" label costs ~75px, which is the difference
+     between the URL field showing the paste id and cutting it off. The button
+     keeps its amber fill: that is what marks it as the action of the row,
+     and dropping to a grey icon would make it indistinguishable from the
+     secondary new-paste button beside it. */
+  @media (max-width: 479px) {
+    #copyShareLabel { display: none; }
+    #copyShareBtn { width: var(--control-h); padding: 0; }
+  }
+
+  /* With the label hidden there is no "Copied!" text to change, so the button
+     itself confirms — the same green flash every other copy control in px0 uses. */
+  .btn-save.copied {
+    background: var(--green-fill);
+    color: var(--green);
+    box-shadow: none;
+  }
+
   @media (max-width: 767px) {
     textarea, .preview-pane { padding: 1.25rem 1rem; }
 
@@ -754,12 +776,6 @@ export const LANDING_CSS = `
       border-left: none;
       border-top: 1px solid var(--border);
     }
-
-    /* Let the banner wrap instead of crushing the URL. The URL is the first
-       child and keeps its own row; an explicit order here used to push it
-       below the buttons, which made sense only while a badge led the row. */
-    .header-share-banner { flex-wrap: wrap; }
-    #shareUrl { flex-basis: 100%; }
 
     .inline-pass-bar.visible { max-width: 170px; }
     .inline-pass-input { width: 100px; }

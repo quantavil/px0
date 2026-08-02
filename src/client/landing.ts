@@ -519,6 +519,9 @@ function showShareLink(url: string, isBurn: boolean) {
   copyBtn?.addEventListener("click", () => {
     urlInput?.select();
     copyToClipboard(fullUrl);
+    // The label is hidden on narrow screens, so the flash is the only
+    // confirmation there — and a welcome second signal where the label shows.
+    flashCopied(copyBtn);
     if (copyLabel) copyLabel.textContent = "Copied!";
     setTimeout(() => {
       if (copyLabel) copyLabel.textContent = "Copy Link";
