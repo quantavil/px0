@@ -492,9 +492,8 @@ function showShareLink(url: string, isBurn: boolean) {
   banner.className = `header-share-banner${isBurn ? " is-burn" : ""}`;
   banner.innerHTML = `
     <input type="text" id="shareUrl" readonly value="${fullUrl}" aria-label="Share link">
-    <button type="button" id="copyShareBtn" class="btn-save" title="Copy link to clipboard">
+    <button type="button" id="copyShareBtn" class="btn-save" title="Copy link to clipboard" aria-label="Copy link to clipboard">
       ${copyIcon}
-      <span id="copyShareLabel">Copy Link</span>
     </button>
     <button type="button" id="createNewBtn" class="btn-action" title="Create another paste">
       ${plusIcon}
@@ -514,18 +513,11 @@ function showShareLink(url: string, isBurn: boolean) {
   const copyBtn = document.getElementById(
     "copyShareBtn",
   ) as HTMLButtonElement | null;
-  const copyLabel = document.getElementById("copyShareLabel");
 
   copyBtn?.addEventListener("click", () => {
     urlInput?.select();
     copyToClipboard(fullUrl);
-    // The label is hidden on narrow screens, so the flash is the only
-    // confirmation there — and a welcome second signal where the label shows.
     flashCopied(copyBtn);
-    if (copyLabel) copyLabel.textContent = "Copied!";
-    setTimeout(() => {
-      if (copyLabel) copyLabel.textContent = "Copy Link";
-    }, 2000);
   });
 
   document.getElementById("createNewBtn")?.addEventListener("click", () => {

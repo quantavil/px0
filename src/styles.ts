@@ -743,18 +743,15 @@ export const LANDING_CSS = `
   .header-share-banner.is-burn #shareUrl { border-color: var(--red-line); }
   #shareUrl:focus { border-color: var(--amber); }
 
-  /* Below 480px the "Copy Link" label costs ~75px, which is the difference
-     between the URL field showing the paste id and cutting it off. The button
-     keeps its amber fill: that is what marks it as the action of the row,
-     and dropping to a grey icon would make it indistinguishable from the
-     secondary new-paste button beside it. */
-  @media (max-width: 479px) {
-    #copyShareLabel { display: none; }
-    #copyShareBtn { width: var(--control-h); padding: 0; }
-  }
+  /* Icon only, at every width — no breakpoint, no second layout to keep in
+     sync. The "Copy Link" label cost ~75px that the URL field needs more, and
+     the URL is the whole point of this row. The amber fill stays: that is what
+     marks this as the action of the row rather than the icon-shaped
+     new-paste button beside it. */
+  #copyShareBtn { width: var(--control-h); padding: 0; }
 
-  /* With the label hidden there is no "Copied!" text to change, so the button
-     itself confirms — the same green flash every other copy control in px0 uses. */
+  /* No label left to read "Copied!", so the button itself confirms — the same
+     green flash every other copy control in px0 uses. */
   .btn-save.copied {
     background: var(--green-fill);
     color: var(--green);
