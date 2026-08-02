@@ -177,7 +177,7 @@ The Worker is served at `https://px0.<account-subdomain>.workers.dev` (e.g. `htt
    - On the view page, entering the password derives the key in the browser and decrypts the content client-side. Invalid passwords return `Incorrect password — check it and try again.`
 2. **Zero-Knowledge Key Storage**:
    - For hash-based E2EE (`/#key`), the 256-bit raw key is Base64URL-encoded and attached strictly to the URL fragment (`/#key`), which HTTP GET requests never transmit.
-   - The password is shown in the share banner alongside the link when a paste is created. Store it then: zero-knowledge means a lost password is unrecoverable by anyone, px0 included.
+   - The password stays visible in the header bar after the paste is created. Store it then: zero-knowledge means a lost password is unrecoverable by anyone, px0 included.
 3. **Burn-After-Read Execution**:
    - Pastes marked with `burn` delete immediately upon the first view request (`/:id` or `/raw/:id`); one never viewed expires after 24 hours.
 4. **Post-Parse Output Sanitization**:

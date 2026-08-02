@@ -721,31 +721,6 @@ export const LANDING_CSS = `
     border-bottom-color: var(--red-line);
   }
 
-  .share-banner-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    font-size: 0.75rem;
-    font-weight: 700;
-    font-family: var(--mono);
-    color: var(--amber);
-    background: rgba(210, 153, 34, 0.15);
-    border: 1px solid var(--amber-line);
-    padding: 0 0.65rem;
-    height: var(--control-h);
-    border-radius: var(--radius-sm);
-    white-space: nowrap;
-    flex-shrink: 0;
-  }
-
-  .share-banner-badge svg { width: 14px; height: 14px; flex-shrink: 0; }
-
-  .header-share-banner.is-burn .share-banner-badge {
-    color: var(--red);
-    background: var(--red-fill);
-    border-color: var(--red-line);
-  }
-
   #shareUrl {
     flex: 1;
     min-width: 0;
@@ -764,38 +739,6 @@ export const LANDING_CSS = `
   .header-share-banner.is-burn #shareUrl { border-color: var(--red-line); }
   #shareUrl:focus { border-color: var(--amber); }
 
-  /* The password only ever existed in the header bar. Copy the link, close the
-     tab, and a zero-knowledge paste is unrecoverable — so the "you're done"
-     row has to carry the password too, not just the URL. */
-  .share-pass-chunk {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    flex-shrink: 0;
-  }
-
-  .share-pass-chunk::before {
-    content: "pass";
-    font-family: var(--mono);
-    font-size: 0.7rem;
-    color: var(--text-muted);
-  }
-
-  #sharePass {
-    width: 9rem;
-    height: var(--control-h);
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid var(--green-line);
-    color: var(--green);
-    font-family: var(--mono);
-    font-size: 0.82rem;
-    padding: 0 0.6rem;
-    border-radius: 7px;
-    outline: none;
-  }
-
-  #sharePass:focus { border-color: var(--green); }
-
   @media (max-width: 767px) {
     textarea, .preview-pane { padding: 1.25rem 1rem; }
 
@@ -812,11 +755,11 @@ export const LANDING_CSS = `
       border-top: 1px solid var(--border);
     }
 
-    /* The banner is 4 controls wide; let it wrap instead of crushing the URL. */
+    /* Let the banner wrap instead of crushing the URL. The URL is the first
+       child and keeps its own row; an explicit order here used to push it
+       below the buttons, which made sense only while a badge led the row. */
     .header-share-banner { flex-wrap: wrap; }
-    #shareUrl { order: 3; flex-basis: 100%; }
-    .share-pass-chunk { order: 4; }
-    #sharePass { flex: 1; }
+    #shareUrl { flex-basis: 100%; }
 
     .inline-pass-bar.visible { max-width: 170px; }
     .inline-pass-input { width: 100px; }

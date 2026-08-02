@@ -390,7 +390,6 @@ app.get("/:id", async (c) => {
           </header>
           <main class="not-found-wrapper">
             <div class="status-code">404</div>
-            <div class="badge badge-ttl">›_ paste_expired_or_absent</div>
             <h1 class="not-found-title">Paste Unavailable</h1>
             <p class="not-found-subtitle">This paste has expired, self-destructed after reading, or never existed.</p>
           </main>

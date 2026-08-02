@@ -403,7 +403,9 @@ describe("Hono Security & Route Handlers", () => {
     expect(res.status).toBe(404);
     const text = await res.text();
     expect(text).toContain("Paste Unavailable");
-    expect(text).toContain("paste_expired_or_absent");
+    expect(text).toContain(
+      "expired, self-destructed after reading, or never existed",
+    );
   });
 
   test("GET /raw/nonexistent returns 404 plaintext response", async () => {

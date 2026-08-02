@@ -218,7 +218,8 @@ func main() {
     // Creator is NOT redirected (that would burn it). A share-link overlay appears instead.
     await page.locator('button[type="submit"]').click();
     await expect(page.locator('#headerShareBanner')).toBeVisible();
-    await expect(page.locator('.share-banner-badge')).toContainText('Burn paste ready');
+    // No badge announces it — the banner's red ground is what marks a burn paste.
+    await expect(page.locator('#headerShareBanner')).toHaveClass(/is-burn/);
     // The banner is a document-flow row, never a fixed full-screen overlay.
     await expect(page.locator('#headerShareBanner')).toHaveCSS('position', 'static');
     await expect(page.locator('#content')).toBeVisible();
@@ -263,9 +264,9 @@ func main() {
 
     await page.locator('button[type="submit"]').click();
     await expect(page.locator('#headerShareBanner')).toBeVisible();
-    // Only this string can decrypt the paste — if the banner shows just the URL,
-    // copying it and closing the tab loses the paste for good.
-    await expect(page.locator('#sharePass')).toHaveValue('my-vault-pass-123');
+    // The password lives in the header bar, not the banner — the banner is the
+    // link and nothing else.
+    await expect(page.locator('#inlinePassInput')).toHaveValue('my-vault-pass-123');
     const passUrl = await page.locator('#shareUrl').inputValue();
     await page.goto(passUrl);
 
@@ -373,7 +374,9 @@ func main() {
     const notFoundRes = await page.goto('/invalid_page_9999');
     expect(notFoundRes?.status()).toBe(404);
     await expect(page.locator('.status-code')).toHaveText('404');
-    await expect(page.locator('.badge-ttl')).toContainText('›_ paste_expired_or_absent');
+    // The pseudo-badge is gone — the title and subtitle already say this.
+    await expect(page.locator('.badge-ttl')).toHaveCount(0);
+    await expect(page.locator('.not-found-title')).toHaveText('Paste Unavailable');
     await expect(page.locator('header .btn-action')).toBeVisible();
   });
 

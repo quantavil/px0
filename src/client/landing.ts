@@ -1,11 +1,4 @@
-import {
-  copyIcon,
-  flameSvg,
-  globeSvg,
-  linkIcon,
-  lockIcon,
-  plusIcon,
-} from "../icons";
+import { copyIcon, globeSvg, lockIcon, plusIcon } from "../icons";
 import { ENC_PREFIX, MAX_PASTE_BYTES, PASS_PREFIX } from "../utils";
 import {
   bytesToBase64Url,
@@ -475,7 +468,7 @@ function initLanding() {
         // Every creation flow (burn, password, E2EE, TTL) shows the same share
         // overlay instead of redirecting. Keeps the UX consistent, and a burn
         // paste is never consumed by the creator's own redirect.
-        showShareLink(shareUrl, selectedTtl === "burn", passwordVal);
+        showShareLink(shareUrl, selectedTtl === "burn");
       }
     });
   }
@@ -486,28 +479,19 @@ function initLanding() {
 // applied `.share-overlay` (position: fixed; inset: 0; backdrop-filter: blur),
 // which turned this into a full-screen sheet that blurred and blocked the
 // entire editor behind it.
-function showShareLink(url: string, isBurn: boolean, password = "") {
+function showShareLink(url: string, isBurn: boolean) {
   const fullUrl = window.location.origin + url;
-  const icon = isBurn ? flameSvg : linkIcon;
-  const title = isBurn ? "Burn paste ready" : "Paste created";
-  // Nothing but this string can ever decrypt the paste — not px0, not the
-  // server. If the creator copies only the link and leaves, it is gone.
-  const passChunk = password
-    ? `<span class="share-pass-chunk">
-        <input type="text" id="sharePass" readonly value="${password.replace(/"/g, "&quot;")}" aria-label="Paste password — store it now, it cannot be recovered">
-        <button type="button" id="copySharePassBtn" class="btn-action" title="Copy password" aria-label="Copy password">${copyIcon}</button>
-      </span>`
-    : "";
 
   document.getElementById("headerShareBanner")?.remove();
 
   const banner = document.createElement("div");
   banner.id = "headerShareBanner";
+  // The banner appearing is the message — it used to also carry a
+  // "Paste created" badge saying so. Burn still reads as burn: the row keeps
+  // its red ground and red field border via `is-burn`.
   banner.className = `header-share-banner${isBurn ? " is-burn" : ""}`;
   banner.innerHTML = `
-    <span class="share-banner-badge">${icon} ${title}</span>
     <input type="text" id="shareUrl" readonly value="${fullUrl}" aria-label="Share link">
-    ${passChunk}
     <button type="button" id="copyShareBtn" class="btn-save" title="Copy link to clipboard">
       ${copyIcon}
       <span id="copyShareLabel">Copy Link</span>
@@ -539,14 +523,6 @@ function showShareLink(url: string, isBurn: boolean, password = "") {
     setTimeout(() => {
       if (copyLabel) copyLabel.textContent = "Copy Link";
     }, 2000);
-  });
-
-  const copyPassBtn = document.getElementById(
-    "copySharePassBtn",
-  ) as HTMLButtonElement | null;
-  copyPassBtn?.addEventListener("click", () => {
-    copyToClipboard(password);
-    flashCopied(copyPassBtn);
   });
 
   document.getElementById("createNewBtn")?.addEventListener("click", () => {
