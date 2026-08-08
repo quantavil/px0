@@ -42,13 +42,13 @@ export const CSS_VARIABLES = `
     --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     --control-h: 32px;
 
-    /* Sugar-High syntax highlighting tokens */
-    --sh-keyword: #ff7b72;
-    --sh-string: #a5d6ff;
-    --sh-comment: #8b949e;
-    --sh-number: #79c0ff;
-    --sh-identifier: #d2a8ff;
-    --sh-sign: #79c0ff;
+    /* Dracula-inspired syntax highlighting tokens */
+    --sh-keyword: #ff79c6;
+    --sh-string: #f1fa8c;
+    --sh-comment: #6272a4;
+    --sh-number: #bd93f9;
+    --sh-identifier: #50fa7b;
+    --sh-sign: #8be9fd;
   }
 `;
 
@@ -270,6 +270,19 @@ export const BASE_CSS = `
 
 // Shared Markdown typography and syntax highlighting styles
 export const MARKDOWN_CSS = `
+  /* Selection rescue: ensures gradient text remains 100% visible when selected */
+  ::selection {
+    background-color: rgba(15, 182, 214, 0.35);
+    color: var(--text);
+    -webkit-text-fill-color: var(--text);
+  }
+
+  :is(h1, h2, h3, h4, h5, h6, strong, em)::selection {
+    -webkit-text-fill-color: var(--text) !important;
+    background-clip: border-box !important;
+    -webkit-background-clip: border-box !important;
+  }
+
   .markdown-body, .preview-pane {
     line-height: 1.7;
     font-size: 1.05rem;
@@ -278,11 +291,54 @@ export const MARKDOWN_CSS = `
 
   .markdown-body > :first-child, .preview-pane > :first-child { margin-top: 0; }
 
-  .markdown-body h1, .preview-pane h1 { font-size: 2.1rem; font-weight: 700; color: #f0c674; margin: 1.75rem 0 1rem; letter-spacing: -0.02em; }
-  .markdown-body h2, .preview-pane h2 { font-size: 1.6rem; font-weight: 600; color: #79c0ff; margin: 1.5rem 0 0.85rem; letter-spacing: -0.01em; }
-  .markdown-body h3, .preview-pane h3 { font-size: 1.3rem; font-weight: 600; color: #d2a8ff; margin: 1.25rem 0 0.75rem; }
-  .markdown-body h4, .preview-pane h4 { font-size: 1.1rem; font-weight: 600; color: #ffa657; margin: 1.1rem 0 0.6rem; }
-  .markdown-body h5, .markdown-body h6, .preview-pane h5, .preview-pane h6 { font-size: 0.95rem; font-weight: 600; color: #a5d6ff; margin: 1rem 0 0.5rem; }
+  /* Gradient headings without solid underline lines */
+  .markdown-body :is(h1, h2, h3, h4, h5, h6),
+  .preview-pane :is(h1, h2, h3, h4, h5, h6) {
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    border-bottom: none;
+  }
+
+  .markdown-body h1, .preview-pane h1 { font-size: 2.1rem; font-weight: 700; background-image: linear-gradient(135deg, #0fb6d6, #bb9af7); margin: 1.75rem 0 1rem; letter-spacing: -0.02em; }
+  .markdown-body h2, .preview-pane h2 { font-size: 1.6rem; font-weight: 600; background-image: linear-gradient(135deg, #e04f90, #e2a360); margin: 1.5rem 0 0.85rem; letter-spacing: -0.01em; }
+  .markdown-body h3, .preview-pane h3 { font-size: 1.3rem; font-weight: 600; background-image: linear-gradient(135deg, #4ade80, #3b82f6); margin: 1.25rem 0 0.75rem; }
+  .markdown-body h4, .preview-pane h4 { font-size: 1.1rem; font-weight: 600; background-image: linear-gradient(135deg, #bb9af7, #ff7a7a); margin: 1.1rem 0 0.6rem; }
+  .markdown-body h5, .preview-pane h5 { font-size: 0.95rem; font-weight: 600; background-image: linear-gradient(135deg, #45e0a2, #45aaff); margin: 1rem 0 0.5rem; }
+  .markdown-body h6, .preview-pane h6 { font-size: 0.95rem; font-weight: 600; background-image: linear-gradient(135deg, #ffc93c, #f4569d); margin: 1rem 0 0.5rem; }
+
+  /* Text style gradients: bold, italic, bold-italic */
+  .markdown-body strong, .preview-pane strong {
+    font-weight: 700;
+    background-image: linear-gradient(135deg, #ff9a56, #ff6b6b);
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .markdown-body em, .preview-pane em {
+    font-style: italic;
+    background-image: linear-gradient(135deg, #7de6eb, #3fe9cf);
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .markdown-body strong em, .markdown-body em strong,
+  .preview-pane strong em, .preview-pane em strong {
+    font-weight: 700;
+    font-style: italic;
+    background-image: linear-gradient(135deg, #ff6ec7, #ff93ac);
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  /* Reset links and inline code inside headings or bold/italic */
+  :is(.markdown-body, .preview-pane) :is(h1, h2, h3, h4, h5, h6, strong, em) :is(a, code) {
+    -webkit-text-fill-color: currentColor !important;
+    background-image: none !important;
+    background-clip: border-box !important;
+    -webkit-background-clip: border-box !important;
+  }
 
   .markdown-body p, .preview-pane p { margin-bottom: 1.1rem; word-break: break-word; }
   .markdown-body ul, .markdown-body ol, .preview-pane ul, .preview-pane ol { margin: 0.75rem 0 1.1rem 1.75rem; }
@@ -291,11 +347,19 @@ export const MARKDOWN_CSS = `
   .markdown-body li > ul, .markdown-body li > ol,
   .preview-pane li > ul, .preview-pane li > ol { margin: 0.35rem 0 0.35rem 1.25rem; }
 
-  .markdown-body blockquote, .preview-pane blockquote { border-left: 3px solid var(--amber); background: rgba(210, 153, 34, 0.06); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; padding: 0.6rem 1rem; color: #c9d1d9; margin: 1rem 0; font-style: italic; }
+  .markdown-body blockquote, .preview-pane blockquote {
+    border-left: 3px solid #0fb6d6;
+    background: linear-gradient(to right, rgba(15, 182, 214, 0.10), transparent);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    padding: 0.6rem 1rem;
+    color: #d4d4d4;
+    margin: 1rem 0;
+    font-style: italic;
+  }
+
   .markdown-body hr, .preview-pane hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
-  .markdown-body a, .preview-pane a { color: var(--blue); text-decoration: none; text-underline-offset: 3px; word-break: break-word; }
-  .markdown-body a:hover, .preview-pane a:hover { text-decoration: underline; }
-  .markdown-body strong, .preview-pane strong { font-weight: 700; color: #ffffff; }
+  .markdown-body a, .preview-pane a { color: #5ec4e0; text-decoration: none; text-underline-offset: 3px; word-break: break-word; transition: color 0.2s ease; }
+  .markdown-body a:hover, .preview-pane a:hover { color: #bbecff; text-decoration: underline; }
   .markdown-body del, .preview-pane del { color: var(--text-muted); }
 
   /* GFM tables — previously unstyled, so cells floated with no structure. */
