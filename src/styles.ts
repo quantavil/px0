@@ -278,11 +278,11 @@ export const MARKDOWN_CSS = `
 
   .markdown-body > :first-child, .preview-pane > :first-child { margin-top: 0; }
 
-  .markdown-body h1, .preview-pane h1 { font-size: 2.1rem; font-weight: 700; margin: 1.75rem 0 1rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; letter-spacing: -0.02em; }
-  .markdown-body h2, .preview-pane h2 { font-size: 1.6rem; font-weight: 600; margin: 1.5rem 0 0.85rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.3rem; }
-  .markdown-body h3, .preview-pane h3 { font-size: 1.3rem; font-weight: 600; margin: 1.25rem 0 0.75rem; }
-  .markdown-body h4, .preview-pane h4 { font-size: 1.1rem; font-weight: 600; margin: 1.1rem 0 0.6rem; }
-  .markdown-body h5, .markdown-body h6, .preview-pane h5, .preview-pane h6 { font-size: 0.95rem; font-weight: 600; color: var(--text-muted); margin: 1rem 0 0.5rem; }
+  .markdown-body h1, .preview-pane h1 { font-size: 2.1rem; font-weight: 700; color: #f0c674; margin: 1.75rem 0 1rem; letter-spacing: -0.02em; }
+  .markdown-body h2, .preview-pane h2 { font-size: 1.6rem; font-weight: 600; color: #79c0ff; margin: 1.5rem 0 0.85rem; letter-spacing: -0.01em; }
+  .markdown-body h3, .preview-pane h3 { font-size: 1.3rem; font-weight: 600; color: #d2a8ff; margin: 1.25rem 0 0.75rem; }
+  .markdown-body h4, .preview-pane h4 { font-size: 1.1rem; font-weight: 600; color: #ffa657; margin: 1.1rem 0 0.6rem; }
+  .markdown-body h5, .markdown-body h6, .preview-pane h5, .preview-pane h6 { font-size: 0.95rem; font-weight: 600; color: #a5d6ff; margin: 1rem 0 0.5rem; }
 
   .markdown-body p, .preview-pane p { margin-bottom: 1.1rem; word-break: break-word; }
   .markdown-body ul, .markdown-body ol, .preview-pane ul, .preview-pane ol { margin: 0.75rem 0 1.1rem 1.75rem; }
@@ -291,10 +291,11 @@ export const MARKDOWN_CSS = `
   .markdown-body li > ul, .markdown-body li > ol,
   .preview-pane li > ul, .preview-pane li > ol { margin: 0.35rem 0 0.35rem 1.25rem; }
 
-  .markdown-body blockquote, .preview-pane blockquote { border-left: 3px solid var(--amber); padding-left: 1rem; color: var(--text-muted); margin: 1rem 0; font-style: italic; }
+  .markdown-body blockquote, .preview-pane blockquote { border-left: 3px solid var(--amber); background: rgba(210, 153, 34, 0.06); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; padding: 0.6rem 1rem; color: #c9d1d9; margin: 1rem 0; font-style: italic; }
   .markdown-body hr, .preview-pane hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
-  .markdown-body a, .preview-pane a { color: var(--amber); text-underline-offset: 3px; word-break: break-word; }
-  .markdown-body strong, .preview-pane strong { font-weight: 700; color: #fff; }
+  .markdown-body a, .preview-pane a { color: var(--blue); text-decoration: none; text-underline-offset: 3px; word-break: break-word; }
+  .markdown-body a:hover, .preview-pane a:hover { text-decoration: underline; }
+  .markdown-body strong, .preview-pane strong { font-weight: 700; color: #ffffff; }
   .markdown-body del, .preview-pane del { color: var(--text-muted); }
 
   /* GFM tables — previously unstyled, so cells floated with no structure. */
