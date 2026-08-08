@@ -226,8 +226,11 @@ func main() {
 
     const pasteUrl = await page.locator('#shareUrl').inputValue();
 
-    // First actual view -> Displays paste content and Burned After Read badge
+    // First actual view -> Displays interstitial, click Reveal to view & burn
     await page.goto(pasteUrl);
+    await expect(page.locator('.not-found-title')).toHaveText('Burn-After-Read Paste');
+    await page.locator('text=Reveal & Self-Destruct').click();
+
     await expect(page.locator('.badge-burn-once')).toContainText('Burned');
     await expect(page.locator('#output h1')).toHaveText('Top Secret Burn Note');
 

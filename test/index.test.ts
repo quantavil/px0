@@ -312,8 +312,15 @@ describe("Hono Security & Route Handlers", () => {
     expect(res.status).toBe(200);
     const data = (await res.json()) as { id: string };
 
-    // First view -> Returns 200 OK with Burned After Read badge
-    const firstView = await app.request(`/${data.id}`);
+    // Initial view without ?confirm=1 -> Interstitial warning page (bot/prefetch protection)
+    const prefetchView = await app.request(`/${data.id}`);
+    expect(prefetchView.status).toBe(200);
+    const prefetchHtml = await prefetchView.text();
+    expect(prefetchHtml).toContain("Burn-After-Read Paste");
+    expect(prefetchHtml).toContain("Reveal & Self-Destruct");
+
+    // Confirmed view -> Returns 200 OK with Burned After Read badge
+    const firstView = await app.request(`/${data.id}?confirm=1`);
     expect(firstView.status).toBe(200);
     const firstHtml = await firstView.text();
     expect(firstHtml).toContain("Burned");
@@ -324,6 +331,45 @@ describe("Hono Security & Route Handlers", () => {
     // Second view -> Paste has self-destructed! Returns 404
     const secondView = await app.request(`/${data.id}`);
     expect(secondView.status).toBe(404);
+  });
+
+  test("DELETE /api/paste/:id requires valid deleteToken", async () => {
+    const res = await app.request("/api/paste", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: "Protected paste content" }),
+    });
+    expect(res.status).toBe(200);
+    const data = (await res.json()) as { id: string; deleteToken: string };
+    expect(data.deleteToken).toBeDefined();
+
+    // Delete without token -> 401 Unauthorized
+    const unauthDel = await app.request(`/api/paste/${data.id}`, {
+      method: "DELETE",
+    });
+    expect(unauthDel.status).toBe(401);
+
+    // Delete with invalid token -> 401 Unauthorized
+    const wrongDel = await app.request(
+      `/api/paste/${data.id}?token=invalidToken123`,
+      {
+        method: "DELETE",
+      },
+    );
+    expect(wrongDel.status).toBe(401);
+
+    // Delete with valid token -> 200 OK
+    const validDel = await app.request(
+      `/api/paste/${data.id}?token=${data.deleteToken}`,
+      {
+        method: "DELETE",
+      },
+    );
+    expect(validDel.status).toBe(200);
+
+    // Subsequent GET returns 404
+    const checkView = await app.request(`/${data.id}`);
+    expect(checkView.status).toBe(404);
   });
 
   test("POST /api/paste handles Password Protected PASS: payload format correctly", async () => {

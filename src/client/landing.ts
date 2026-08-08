@@ -455,8 +455,13 @@ function initLanding() {
         return;
       }
 
-      const data = (await res.json()) as { id: string };
+      const data = (await res.json()) as { id: string; deleteToken?: string };
       if (data.id) {
+        if (data.deleteToken) {
+          try {
+            localStorage.setItem(`px0_del_${data.id}`, data.deleteToken);
+          } catch {}
+        }
         setSaveBusy(null);
 
         const shareUrl = `/${data.id}${

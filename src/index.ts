@@ -45,16 +45,17 @@ type Bindings = {
 
 export const inMemoryPastes = new Map<
   string,
-  { payload: string; expiresAt?: number }
+  { payload: string; expiresAt?: number; deleteToken?: string }
 >();
 
 export function setInMemoryPaste(
   id: string,
   payload: string,
   ttlSeconds?: number,
+  deleteToken?: string,
 ) {
   const expiresAt = ttlSeconds ? Date.now() + ttlSeconds * 1000 : undefined;
-  inMemoryPastes.set(id, { payload, expiresAt });
+  inMemoryPastes.set(id, { payload, expiresAt, deleteToken });
 }
 
 export function getAndConsumeInMemoryPaste(id: string): string | null {
@@ -71,6 +72,7 @@ export function getAndConsumeInMemoryPaste(id: string): string | null {
 type PasteRecord = {
   value: string;
   expiresAtMs?: number;
+  deleteToken?: string;
 };
 
 // Read a paste from KV (with metadata) or the in-memory fallback,
@@ -85,6 +87,7 @@ async function readPaste(
     const meta = res.metadata as {
       createdAt?: number;
       ttlSeconds?: number;
+      deleteToken?: string;
     } | null;
     let expiresAtMs: number | undefined;
     if (meta?.createdAt && meta.ttlSeconds) {
@@ -98,7 +101,7 @@ async function readPaste(
         expiresAtMs = key.expiration * 1000;
       }
     }
-    return { value: res.value, expiresAtMs };
+    return { value: res.value, expiresAtMs, deleteToken: meta?.deleteToken };
   }
 
   const entry = inMemoryPastes.get(id);
@@ -107,7 +110,11 @@ async function readPaste(
     inMemoryPastes.delete(id);
     return null;
   }
-  return { value: entry.payload, expiresAtMs: entry.expiresAt };
+  return {
+    value: entry.payload,
+    expiresAtMs: entry.expiresAt,
+    deleteToken: entry.deleteToken,
+  };
 }
 
 // In-memory rate limiting map (30 pastes / minute per IP)
@@ -311,6 +318,7 @@ app.post("/api/paste", async (c) => {
   }
 
   const id = generateShortId(8);
+  const deleteToken = generateShortId(16);
   const selectedTtl = typeof ttl === "string" ? ttl : "30d";
   if (selectedTtl !== "burn" && !TTL_MAP[selectedTtl]) {
     return c.json({ error: "Invalid TTL option" }, 400);
@@ -323,10 +331,10 @@ app.post("/api/paste", async (c) => {
   if (c.env?.PASTES_KV) {
     await c.env.PASTES_KV.put(id, storedPayload, {
       expirationTtl: ttlSeconds,
-      metadata: { createdAt: Date.now(), ttlSeconds },
+      metadata: { createdAt: Date.now(), ttlSeconds, deleteToken },
     });
   } else {
-    setInMemoryPaste(id, storedPayload, ttlSeconds);
+    setInMemoryPaste(id, storedPayload, ttlSeconds, deleteToken);
   }
 
   // A terminal wants something pipeable, so the raw-body path answers with the
@@ -334,9 +342,10 @@ app.post("/api/paste", async (c) => {
   // badge: nothing posted this way is encrypted — all the crypto lives in
   // landing.ts, and curl has none of it.
   return isJson
-    ? c.json({ id })
+    ? c.json({ id, deleteToken })
     : c.text(`${new URL(c.req.url).origin}/${id}\n`, 200, {
         "X-Px0-Storage": "plaintext",
+        "X-Px0-Delete-Token": deleteToken,
       });
 });
 
@@ -351,6 +360,19 @@ app.delete("/api/paste/:id", async (c) => {
     );
   }
   const id = c.req.param("id");
+  const providedToken =
+    c.req.query("token") || c.req.header("x-delete-token") || "";
+
+  const record = await readPaste(id, c.env);
+  if (!record) {
+    return c.json({ error: "Paste not found" }, 404);
+  }
+
+  // Require matching deleteToken if one was issued for this paste
+  if (record.deleteToken && record.deleteToken !== providedToken) {
+    return c.json({ error: "Unauthorized: Invalid delete token" }, 401);
+  }
+
   if (c.env?.PASTES_KV) {
     await c.env.PASTES_KV.delete(id);
   } else {
@@ -400,8 +422,52 @@ app.get("/:id", async (c) => {
     );
   }
 
-  // Check and handle Burn After Read self-destruction
+  // Check and handle Burn After Read self-destruction with bot/prefetch protection
   const isBurnAfterRead = rawContent.startsWith(BURN_PREFIX);
+  const isConfirmed = c.req.query("confirm") === "1";
+  const isPrefetch =
+    c.req.header("purpose") === "prefetch" ||
+    c.req.header("sec-purpose") === "prefetch";
+
+  if (isBurnAfterRead && (!isConfirmed || isPrefetch)) {
+    return c.html(
+      html`
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <meta name="theme-color" content="#161b22">
+          <title>Burn-After-Read Paste | px0</title>
+          <link rel="icon" type="image/svg+xml" href="/favicon.ico">
+          <style>
+            ${raw(CSS_VARIABLES)}
+            ${raw(BASE_CSS)}
+            ${raw(NOT_FOUND_CSS)}
+          </style>
+        </head>
+        <body>
+          <header>
+            <a href="/" class="brand" title="px0 homepage">${raw(brandIcon)}</a>
+            <a href="/" class="btn-action" title="New Paste" aria-label="New Paste">${raw(plusIcon)}</a>
+          </header>
+          <main class="not-found-wrapper">
+            <div class="status-code" style="color: var(--red); font-size: 3rem; margin-bottom: 1rem;">${raw(flameSvg)}</div>
+            <h1 class="not-found-title">Burn-After-Read Paste</h1>
+            <p class="not-found-subtitle">This paste will self-destruct permanently after being viewed once.</p>
+            <a href="/${id}?confirm=1" class="btn-save" style="margin-top: 1.5rem; text-decoration: none; display: inline-flex;">
+              ${raw(flameSvg)}
+              <span>Reveal & Self-Destruct</span>
+            </a>
+          </main>
+        </body>
+        </html>
+      `,
+      200,
+      { "Cache-Control": "no-store" },
+    );
+  }
+
   if (isBurnAfterRead) {
     rawContent = rawContent.slice(BURN_PREFIX.length);
     expiresAtMs = undefined; // burn-after-read pastes self-destruct on view; no countdown
@@ -531,6 +597,14 @@ app.get("/raw/:id", async (c) => {
   }
 
   if (rawContent.startsWith(BURN_PREFIX)) {
+    const isConfirmed = c.req.query("confirm") === "1";
+    if (!isConfirmed) {
+      return c.text(
+        "This is a Burn-After-Read paste. Accessing it will permanently destroy it.\nTo view and self-destruct, append ?confirm=1 to this URL.\n",
+        200,
+        { "Cache-Control": "no-store" },
+      );
+    }
     rawContent = rawContent.slice(BURN_PREFIX.length);
     if (c.env?.PASTES_KV) {
       await c.env.PASTES_KV.delete(id);

@@ -28,3 +28,6 @@
 - **Raw Route vs E2EE:** `/raw/:id` returns raw KV ciphertext for encrypted pastes. Fix: Omit Raw button on encrypted pastes and use client-side Download for decrypted text.
 - **Payload Size Accounting:** Base64/E2EE adds ~35% overhead. Fix: Measure final payload with `TextEncoder` before upload to enforce `MAX_PASTE_BYTES`.
 - **Cache & Security Directives:** `/:id` and `/raw/:id` require `Cache-Control: no-store`; non-root routes use `X-Robots-Tag: noindex, nofollow`.
+- **Unauthenticated Delete Privilege:** Anyone with the read URL could delete any paste. Fix: Issue a 16-char `deleteToken` stored in KV metadata and `localStorage`; require matching token on `DELETE`.
+- **Burn Paste Bot Destruction:** Automated link prefetchers/unfurlers hit `/:id` and burned pastes before human view. Fix: Add "Reveal & Self-Destruct" interstitial confirmation for burn-once pastes.
+- **DOM-Based HTML Sanitizer:** Post-parsing regex sanitizer was prone to HTML attribute mutation bypasses. Fix: Use `DOMParser` tree walking in browser context.

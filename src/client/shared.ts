@@ -19,6 +19,36 @@ export function formatTimeLeft(ms: number): string {
 // Post-parsing HTML sanitizer: strips inline event handlers and dangerous URIs
 // from rendered output. Defence in depth alongside the CSP.
 export function sanitizeOutputHtml(htmlStr: string): string {
+  if (typeof DOMParser !== "undefined") {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(htmlStr, "text/html");
+    const elements = doc.body.querySelectorAll("*");
+    for (const el of Array.from(elements)) {
+      const tag = el.tagName.toLowerCase();
+      if (
+        ["script", "iframe", "object", "embed", "style", "form"].includes(tag)
+      ) {
+        el.remove();
+        continue;
+      }
+      for (const attr of Array.from(el.attributes)) {
+        const name = attr.name.toLowerCase();
+        const val = attr.value.trim().toLowerCase();
+        if (name.startsWith("on")) {
+          el.removeAttribute(attr.name);
+        } else if (
+          (name === "href" || name === "src") &&
+          (val.startsWith("javascript:") ||
+            val.startsWith("vbscript:") ||
+            val.startsWith("data:"))
+        ) {
+          el.setAttribute(attr.name, "#");
+        }
+      }
+    }
+    return doc.body.innerHTML;
+  }
+
   return (
     htmlStr
       // `[\s/]` not `\s`: HTML lets `/` separate attributes, so `<img/onerror=…>`

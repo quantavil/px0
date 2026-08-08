@@ -65,14 +65,23 @@ function startExpiryCountdown() {
   update();
 }
 
+function getStoredDeleteToken(id: string): string | null {
+  try {
+    return localStorage.getItem(`px0_del_${id}`);
+  } catch {
+    return null;
+  }
+}
+
 function revealPasteActions() {
   const pasteActions = document.getElementById("pasteActions");
   if (pasteActions) {
     pasteActions.style.display = "flex";
   }
-  // Reveal the delete button too so it can't be triggered before a password/E2EE paste is unlocked.
+  // Reveal the delete button only if this browser is the creator holding the deleteToken.
   const deleteBtn = document.getElementById("deleteBtn");
-  if (deleteBtn) {
+  const id = window.location.pathname.slice(1);
+  if (deleteBtn && getStoredDeleteToken(id)) {
     deleteBtn.style.display = "flex";
   }
 }
@@ -200,12 +209,15 @@ function bindDeleteButton() {
   const label = document.getElementById(
     "deleteLabel",
   ) as HTMLSpanElement | null;
-  // initPageViewer re-runs on every hashchange; without this guard each run
-  // stacked another click listener, so the second click fired N delete
-  // requests and the arm/confirm step could be skipped entirely.
   if (!btn || btn.dataset.bound) return;
   btn.dataset.bound = "1";
   const id = window.location.pathname.slice(1);
+  const deleteToken = getStoredDeleteToken(id);
+
+  if (!deleteToken) {
+    btn.style.display = "none";
+    return;
+  }
 
   const reset = () => {
     delete btn.dataset.armed;
@@ -217,9 +229,18 @@ function bindDeleteButton() {
   btn.addEventListener("click", async () => {
     if (btn.dataset.armed === "1") {
       try {
-        await fetch(`/api/paste/${encodeURIComponent(id)}`, {
-          method: "DELETE",
-        });
+        const res = await fetch(
+          `/api/paste/${encodeURIComponent(id)}?token=${encodeURIComponent(deleteToken)}`,
+          {
+            method: "DELETE",
+            headers: { "X-Delete-Token": deleteToken },
+          },
+        );
+        if (res.ok) {
+          try {
+            localStorage.removeItem(`px0_del_${id}`);
+          } catch {}
+        }
       } catch {
         reset();
         return;
