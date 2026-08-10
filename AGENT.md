@@ -31,3 +31,6 @@
 - **Unauthenticated Delete Privilege:** Anyone with the read URL could delete any paste. Fix: Issue a 16-char `deleteToken` stored in KV metadata and `localStorage`; require matching token on `DELETE`.
 - **Burn Paste Bot Destruction:** Automated link prefetchers/unfurlers hit `/:id` and burned pastes before human view. Fix: Add "Reveal & Self-Destruct" interstitial confirmation for burn-once pastes.
 - **DOM-Based HTML Sanitizer:** Post-parsing regex sanitizer was prone to HTML attribute mutation bypasses. Fix: Use `DOMParser` tree walking in browser context.
+- **E2EE Address Bar Hash Sync:** Browser URL bar didn't update to include `#secretKey` on paste creation. Fix: Call `history.pushState(null, "", fullUrl)` in `showShareLink()`.
+- **Missing E2EE Key Recovery UI:** Missing `#key` rendered plain red error text. Fix: Interactive "Decryption Key Required" card allowing manual key entry.
+

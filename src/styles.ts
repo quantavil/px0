@@ -3,18 +3,19 @@ export const CSS_VARIABLES = `
   :root {
     color-scheme: dark;
 
-    --bg: #0d1117;
-    --surface: #161b22;
-    --surface-hi: #1f242d;
-    --header-bg: rgba(22, 27, 34, 0.88);
+    --bg: #100e17;
+    --surface: #191621;
+    --surface-hi: #221e2e;
+    --header-bg: rgba(25, 22, 33, 0.92);
 
     --border: rgba(255, 255, 255, 0.1);
     --border-hover: rgba(255, 255, 255, 0.22);
 
-    --text: #f0f6fc;
-    --text-muted: #8b949e;
-    /* Placeholder/hint text. #484f58 was 2.1:1 against --bg — unreadable. */
-    --text-dim: #7d8590;
+    --text: #d4d4d4;
+    --text-muted: #8890a4;
+    --text-dim: #7b83a0;
+    --text-accent: #0fb6d6;
+    --text-sub-accent: #f4569d;
 
     /* Semantic accents. Each colour ships with a translucent fill and a border
        tint so badges/buttons never mix one hue's text with another's chrome. */
@@ -27,9 +28,9 @@ export const CSS_VARIABLES = `
     --green-fill: rgba(63, 185, 80, 0.12);
     --green-line: rgba(63, 185, 80, 0.3);
 
-    --blue: #58a6ff;
-    --blue-fill: rgba(88, 166, 255, 0.12);
-    --blue-line: rgba(88, 166, 255, 0.3);
+    --blue: #0fb6d6;
+    --blue-fill: rgba(15, 182, 214, 0.12);
+    --blue-line: rgba(15, 182, 214, 0.35);
 
     --red: #f85149;
     --red-fill: rgba(248, 81, 73, 0.12);
@@ -42,9 +43,9 @@ export const CSS_VARIABLES = `
     --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     --control-h: 32px;
 
-    /* Dracula-inspired syntax highlighting tokens */
+    /* Dracula-inspired syntax highlighting tokens (Anthracite theme) */
     --sh-keyword: #ff79c6;
-    --sh-string: #f1fa8c;
+    --sh-string: #e6db74;
     --sh-comment: #6272a4;
     --sh-number: #bd93f9;
     --sh-identifier: #50fa7b;
@@ -291,21 +292,24 @@ export const MARKDOWN_CSS = `
 
   .markdown-body > :first-child, .preview-pane > :first-child { margin-top: 0; }
 
-  /* Gradient headings without solid underline lines */
+  /* Gradient headings with Anthracite fade-out underlines */
   .markdown-body :is(h1, h2, h3, h4, h5, h6),
   .preview-pane :is(h1, h2, h3, h4, h5, h6) {
+    position: relative;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid;
+    border-image-slice: 1;
     background-clip: text;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
-    border-bottom: none;
   }
 
-  .markdown-body h1, .preview-pane h1 { font-size: 2.1rem; font-weight: 700; background-image: linear-gradient(135deg, #0fb6d6, #bb9af7); margin: 1.75rem 0 1rem; letter-spacing: -0.02em; }
-  .markdown-body h2, .preview-pane h2 { font-size: 1.6rem; font-weight: 600; background-image: linear-gradient(135deg, #e04f90, #e2a360); margin: 1.5rem 0 0.85rem; letter-spacing: -0.01em; }
-  .markdown-body h3, .preview-pane h3 { font-size: 1.3rem; font-weight: 600; background-image: linear-gradient(135deg, #4ade80, #3b82f6); margin: 1.25rem 0 0.75rem; }
-  .markdown-body h4, .preview-pane h4 { font-size: 1.1rem; font-weight: 600; background-image: linear-gradient(135deg, #bb9af7, #ff7a7a); margin: 1.1rem 0 0.6rem; }
-  .markdown-body h5, .preview-pane h5 { font-size: 0.95rem; font-weight: 600; background-image: linear-gradient(135deg, #45e0a2, #45aaff); margin: 1rem 0 0.5rem; }
-  .markdown-body h6, .preview-pane h6 { font-size: 0.95rem; font-weight: 600; background-image: linear-gradient(135deg, #ffc93c, #f4569d); margin: 1rem 0 0.5rem; }
+  .markdown-body h1, .preview-pane h1 { font-size: 2.1rem; font-weight: 700; background-image: linear-gradient(135deg, #0fb6d6, #bb9af7); border-image-source: linear-gradient(to right, #0fb6d6, transparent 35%); margin: 1.75rem 0 1rem; letter-spacing: -0.02em; }
+  .markdown-body h2, .preview-pane h2 { font-size: 1.6rem; font-weight: 600; background-image: linear-gradient(135deg, #e04f90, #e2a360); border-image-source: linear-gradient(to right, #e04f90, transparent 35%); margin: 1.5rem 0 0.85rem; letter-spacing: -0.01em; }
+  .markdown-body h3, .preview-pane h3 { font-size: 1.3rem; font-weight: 600; background-image: linear-gradient(135deg, #4ade80, #3b82f6); border-image-source: linear-gradient(to right, #4ade80, transparent 35%); margin: 1.25rem 0 0.75rem; }
+  .markdown-body h4, .preview-pane h4 { font-size: 1.1rem; font-weight: 600; background-image: linear-gradient(135deg, #bb9af7, #ff7a7a); border-image-source: linear-gradient(to right, #bb9af7, transparent 35%); margin: 1.1rem 0 0.6rem; }
+  .markdown-body h5, .preview-pane h5 { font-size: 0.95rem; font-weight: 600; background-image: linear-gradient(135deg, #45e0a2, #45aaff); border-image-source: linear-gradient(to right, #45e0a2, transparent 35%); margin: 1rem 0 0.5rem; }
+  .markdown-body h6, .preview-pane h6 { font-size: 0.95rem; font-weight: 600; background-image: linear-gradient(135deg, #ffc93c, #f4569d); border-image-source: linear-gradient(to right, #ffc93c, transparent 35%); margin: 1rem 0 0.5rem; }
 
   /* Text style gradients: bold, italic, bold-italic */
   .markdown-body strong, .preview-pane strong {
@@ -347,22 +351,68 @@ export const MARKDOWN_CSS = `
   .markdown-body li > ul, .markdown-body li > ol,
   .preview-pane li > ul, .preview-pane li > ol { margin: 0.35rem 0 0.35rem 1.25rem; }
 
+  /* Anthracite Blockquotes & Nested Levels */
   .markdown-body blockquote, .preview-pane blockquote {
-    border-left: 3px solid #0fb6d6;
-    background: linear-gradient(to right, rgba(15, 182, 214, 0.10), transparent);
+    border-left: 3px solid #4aa8fb;
+    background: linear-gradient(to right, rgba(120, 120, 120, 0.15), var(--bg));
     border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
     padding: 0.6rem 1rem;
     color: #d4d4d4;
     margin: 1rem 0;
-    font-style: italic;
   }
 
-  .markdown-body hr, .preview-pane hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+  .markdown-body blockquote blockquote, .preview-pane blockquote blockquote {
+    border-left-color: rgba(244, 86, 157, 0.6);
+    background: linear-gradient(to right, rgba(244, 86, 157, 0.06), var(--bg));
+  }
+
+  .markdown-body blockquote blockquote blockquote, .preview-pane blockquote blockquote blockquote {
+    border-left-color: #bb9af7;
+    background: linear-gradient(to right, rgba(187, 154, 247, 0.06), var(--bg));
+  }
+
+  /* Anthracite Decorative Horizontal Rules with center ornament and top hairline */
+  .markdown-body hr, .preview-pane hr {
+    position: relative;
+    height: 2px;
+    border: none;
+    margin: 2.25rem 0;
+    background: linear-gradient(90deg, transparent 0%, rgba(15, 182, 214, 0.15) 12%, rgba(15, 182, 214, 0.55) 35%, rgba(244, 86, 157, 0.55) 65%, rgba(15, 182, 214, 0.15) 88%, transparent 100%);
+    border-radius: 999px;
+    box-shadow: 0 0 18px rgba(15, 182, 214, 0.18);
+    overflow: visible;
+  }
+
+  .markdown-body hr::before, .preview-pane hr::before {
+    content: '';
+    position: absolute;
+    top: -6px;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent 0%, rgba(15, 182, 214, 0.08) 20%, rgba(15, 182, 214, 0.22) 50%, rgba(15, 182, 214, 0.08) 80%, transparent 100%);
+    border-radius: 999px;
+  }
+
+  .markdown-body hr::after, .preview-pane hr::after {
+    content: "✦";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    padding: 0 0.35rem;
+    background: var(--bg);
+    color: #0fb6d6;
+    font-size: 0.9rem;
+    font-weight: 700;
+    text-shadow: 0 0 8px rgba(15, 182, 214, 0.8);
+  }
+
   .markdown-body a, .preview-pane a { color: #5ec4e0; text-decoration: none; text-underline-offset: 3px; word-break: break-word; transition: color 0.2s ease; }
   .markdown-body a:hover, .preview-pane a:hover { color: #bbecff; text-decoration: underline; }
   .markdown-body del, .preview-pane del { color: var(--text-muted); }
 
-  /* GFM tables — previously unstyled, so cells floated with no structure. */
+  /* GFM tables — Anthracite cyan borders & headers */
   .markdown-body table, .preview-pane table {
     display: block;
     width: max-content;
@@ -375,19 +425,20 @@ export const MARKDOWN_CSS = `
 
   .markdown-body th, .markdown-body td,
   .preview-pane th, .preview-pane td {
-    border: 1px solid var(--border);
+    border: 1px solid rgba(15, 182, 214, 0.18);
     padding: 0.5rem 0.85rem;
     text-align: left;
   }
 
   .markdown-body th, .preview-pane th {
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(15, 182, 214, 0.08);
+    color: #0fb6d6;
     font-weight: 600;
   }
 
   .markdown-body tbody tr:nth-child(even),
   .preview-pane tbody tr:nth-child(even) {
-    background: rgba(255, 255, 255, 0.02);
+    background: rgba(15, 182, 214, 0.02);
   }
 
   .markdown-body img, .preview-pane img {
@@ -398,7 +449,7 @@ export const MARKDOWN_CSS = `
     margin: 1rem 0;
   }
 
-  /* GFM task lists */
+  /* GFM task lists with bounce animation */
   .markdown-body li:has(> input[type="checkbox"]),
   .preview-pane li:has(> input[type="checkbox"]) { list-style: none; margin-left: -1.25rem; }
 
@@ -415,8 +466,14 @@ export const MARKDOWN_CSS = `
   }
 
   .markdown-body input[type="checkbox"]:checked, .preview-pane input[type="checkbox"]:checked {
-    background: var(--amber);
-    border-color: var(--amber);
+    background: #0fb6d6;
+    border-color: #0fb6d6;
+    animation: px-check-bounce 0.25s ease;
+  }
+
+  @keyframes px-check-bounce {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(0.88); }
   }
 
   .markdown-body input[type="checkbox"]:checked::after,
@@ -427,7 +484,7 @@ export const MARKDOWN_CSS = `
     top: 1px;
     width: 4px;
     height: 8px;
-    border: solid #0d1117;
+    border: solid #100e17;
     border-width: 0 2px 2px 0;
     transform: rotate(45deg);
   }

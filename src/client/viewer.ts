@@ -342,8 +342,52 @@ async function initPageViewer() {
   const secretKeyBase64 = window.location.hash.substring(1);
 
   if (!secretKeyBase64) {
-    outputEl.innerHTML =
-      '<p class="viewer-msg is-error">Error: Decryption key missing from URL hash fragment!</p>';
+    outputEl.innerHTML = `
+      <div class="unlock-card-wrapper">
+        <div class="unlock-card">
+          <div class="unlock-icon-container">${lockIcon}</div>
+          <h2 class="unlock-title">Decryption Key Required</h2>
+          <p class="unlock-subtitle">This paste is end-to-end encrypted. The key is normally part of the URL (#...), but was missing from your link.</p>
+          <div class="unlock-form-row">
+            <input type="text" id="manualKeyInput" class="unlock-input" placeholder="Paste decryption key…" aria-label="Decryption key" aria-describedby="keyErr" autocomplete="off" spellcheck="false">
+            <button type="button" id="btnDecryptAction" class="btn-unlock-submit">Decrypt</button>
+          </div>
+          <p id="keyErr" class="unlock-err-msg" role="alert"></p>
+        </div>
+      </div>
+    `;
+
+    const keyInput = document.getElementById(
+      "manualKeyInput",
+    ) as HTMLInputElement | null;
+    const btnDecrypt = document.getElementById(
+      "btnDecryptAction",
+    ) as HTMLButtonElement | null;
+    const keyErr = document.getElementById(
+      "keyErr",
+    ) as HTMLParagraphElement | null;
+
+    const tryManualKey = () => {
+      const val = keyInput?.value.trim() ?? "";
+      if (!val) return;
+      const cleanKey = val.startsWith("#") ? val.slice(1) : val;
+      window.location.hash = cleanKey;
+      initPageViewer();
+    };
+
+    if (btnDecrypt) {
+      btnDecrypt.addEventListener("click", tryManualKey);
+    }
+    if (keyInput) {
+      keyInput.focus();
+      keyInput.addEventListener("input", () => {
+        if (keyErr) keyErr.textContent = "";
+      });
+      keyInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") tryManualKey();
+      });
+    }
+
     return;
   }
 
@@ -375,8 +419,49 @@ async function initPageViewer() {
     attachCodeBlockCopyButtons();
   } catch (err) {
     console.error("Decryption error:", err);
-    outputEl.innerHTML =
-      '<p class="viewer-msg is-error">Error: Invalid decryption key or corrupted payload.</p>';
+    outputEl.innerHTML = `
+      <div class="unlock-card-wrapper">
+        <div class="unlock-card">
+          <div class="unlock-icon-container" style="border-color: var(--red-line); color: var(--red); background: var(--red-fill);">${lockIcon}</div>
+          <h2 class="unlock-title">Decryption Failed</h2>
+          <p class="unlock-subtitle">Invalid decryption key or corrupted payload.</p>
+          <div class="unlock-form-row">
+            <input type="text" id="manualKeyInput" class="unlock-input" placeholder="Enter correct key…" aria-label="Decryption key" autocomplete="off" spellcheck="false">
+            <button type="button" id="btnDecryptAction" class="btn-unlock-submit">Try Again</button>
+          </div>
+          <p id="keyErr" class="unlock-err-msg" role="alert">Error: Decryption key is invalid or corrupted.</p>
+        </div>
+      </div>
+    `;
+
+    const keyInput = document.getElementById(
+      "manualKeyInput",
+    ) as HTMLInputElement | null;
+    const btnDecrypt = document.getElementById(
+      "btnDecryptAction",
+    ) as HTMLButtonElement | null;
+    const keyErr = document.getElementById(
+      "keyErr",
+    ) as HTMLParagraphElement | null;
+
+    const retryManualKey = () => {
+      const val = keyInput?.value.trim() ?? "";
+      if (!val) return;
+      const cleanKey = val.startsWith("#") ? val.slice(1) : val;
+      window.location.hash = cleanKey;
+      initPageViewer();
+    };
+
+    if (btnDecrypt) btnDecrypt.addEventListener("click", retryManualKey);
+    if (keyInput) {
+      keyInput.focus();
+      keyInput.addEventListener("input", () => {
+        if (keyErr) keyErr.textContent = "";
+      });
+      keyInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") retryManualKey();
+      });
+    }
   }
 }
 

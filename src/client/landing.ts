@@ -487,6 +487,10 @@ function initLanding() {
 function showShareLink(url: string, isBurn: boolean) {
   const fullUrl = window.location.origin + url;
 
+  try {
+    window.history.pushState(null, "", fullUrl);
+  } catch {}
+
   document.getElementById("headerShareBanner")?.remove();
 
   const banner = document.createElement("div");
