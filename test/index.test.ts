@@ -318,6 +318,8 @@ describe("Hono Security & Route Handlers", () => {
     const prefetchHtml = await prefetchView.text();
     expect(prefetchHtml).toContain("Burn-After-Read Paste");
     expect(prefetchHtml).toContain("Reveal & Self-Destruct");
+    expect(prefetchHtml).toContain('id="revealBtn"');
+    expect(prefetchHtml).toContain("/static/viewer.js");
 
     // Confirmed view -> Returns 200 OK with Burned After Read badge
     const firstView = await app.request(`/${data.id}?confirm=1`);
@@ -331,6 +333,24 @@ describe("Hono Security & Route Handlers", () => {
     // Second view -> Paste has self-destructed! Returns 404
     const secondView = await app.request(`/${data.id}`);
     expect(secondView.status).toBe(404);
+  });
+
+  test("POST /api/paste with E2EE payload and burn TTL includes revealBtn and viewer script on interstitial", async () => {
+    const encContent = "__PX0_ENC__:abc123encryptedpayload";
+    const res = await app.request("/api/paste", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: encContent, ttl: "burn" }),
+    });
+
+    expect(res.status).toBe(200);
+    const data = (await res.json()) as { id: string };
+
+    const prefetchView = await app.request(`/${data.id}`);
+    expect(prefetchView.status).toBe(200);
+    const prefetchHtml = await prefetchView.text();
+    expect(prefetchHtml).toContain('id="revealBtn"');
+    expect(prefetchHtml).toContain("/static/viewer.js");
   });
 
   test("DELETE /api/paste/:id requires valid deleteToken", async () => {

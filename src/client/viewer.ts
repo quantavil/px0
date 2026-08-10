@@ -256,7 +256,33 @@ function bindDeleteButton() {
   });
 }
 
+function preserveHashOnBurnReveal() {
+  const revealBtn = document.getElementById(
+    "revealBtn",
+  ) as HTMLAnchorElement | null;
+  if (!revealBtn) return;
+
+  const updateHref = () => {
+    if (window.location.hash) {
+      const baseHref =
+        revealBtn.getAttribute("data-base-href") ||
+        revealBtn.getAttribute("href") ||
+        "";
+      const cleanBase = baseHref.split("#")[0];
+      revealBtn.setAttribute("data-base-href", cleanBase);
+      revealBtn.href = `${cleanBase}${window.location.hash}`;
+    }
+  };
+
+  updateHref();
+  if (!revealBtn.dataset.bound) {
+    revealBtn.dataset.bound = "1";
+    revealBtn.addEventListener("click", updateHref);
+  }
+}
+
 async function initPageViewer() {
+  preserveHashOnBurnReveal();
   initPx0Data();
   startExpiryCountdown();
   bindDeleteButton();

@@ -455,11 +455,12 @@ app.get("/:id", async (c) => {
             <div class="status-code" style="color: var(--red); font-size: 3rem; margin-bottom: 1rem;">${raw(flameSvg)}</div>
             <h1 class="not-found-title">Burn-After-Read Paste</h1>
             <p class="not-found-subtitle">This paste will self-destruct permanently after being viewed once.</p>
-            <a href="/${id}?confirm=1" class="btn-save" style="margin-top: 1.5rem; text-decoration: none; display: inline-flex;">
+            <a href="/${id}?confirm=1" id="revealBtn" class="btn-save" style="margin-top: 1.5rem; text-decoration: none; display: inline-flex;">
               ${raw(flameSvg)}
               <span>Reveal & Self-Destruct</span>
             </a>
           </main>
+          <script src="/static/viewer.js" defer></script>
         </body>
         </html>
       `,
