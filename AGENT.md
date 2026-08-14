@@ -36,3 +36,4 @@
 - **Burn-After-Read E2EE Hash Loss:** Clicking "Reveal & Self-Destruct" on a burn paste navigated to `/${id}?confirm=1` without `#secretKey`. Fix: Load `viewer.js` on interstitial and append `window.location.hash` to `#revealBtn`.
 - **PBKDF2 Salt Buffer Offset:** Passing `salt.buffer` ignores Uint8Array byte offsets. Fix: Pass `salt` (`Uint8Array<ArrayBuffer>`) directly to Web Crypto.
 - **Rate Limit Map Memory Growth:** Unbounded IP map growth during traffic spikes. Fix: Enforce hard cap (2,000 entries) with FIFO eviction in `pruneRateLimitMap`.
+- **Ad-Block Filter Collisions on Share Elements:** Elements using generic `#shareUrl` or `.header-share-banner` are blocked by ad-block social/share cosmetic filters. Fix: Use resilient `.px-link-bar`/`.px-link-input` with explicit display overrides.

@@ -818,66 +818,132 @@ export const LANDING_CSS = `
   }
 
   /* Share banner: a real row in the document flow directly under the header.
-     It must never be position:fixed — that is what turned it into a modal
-     that blurred and blocked the whole editor. */
-  /* One row at every width. The URL takes whatever space the two buttons on
-     the right don't need, so the link stays readable instead of being
-     banished to a second row below the controls. */
-  .header-share-banner {
-    display: flex;
+     Ad-block immune, high contrast, fully accessible with mobile/tablet layouts. */
+  .header-share-banner,
+  .px-link-bar {
+    display: flex !important;
     align-items: center;
-    justify-content: flex-end;
-    gap: 0.75rem;
     width: 100%;
-    padding: 0.6rem 1.25rem;
-    background: var(--surface);
+    padding: 0.65rem 1.25rem;
+    background: #161b22;
     border-bottom: 1px solid var(--amber-line);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
     flex-shrink: 0;
     z-index: 9;
-    animation: px-slide-down 0.2s ease;
+    animation: px-slide-down 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   @keyframes px-slide-down {
-    from { transform: translateY(-10px); opacity: 0; }
+    from { transform: translateY(-8px); opacity: 0; }
     to { transform: translateY(0); opacity: 1; }
   }
 
-  .header-share-banner.is-burn {
-    background: #191517;
-    border-bottom-color: var(--red-line);
+  .header-share-banner.is-burn,
+  .px-link-bar.is-burn {
+    background: #1c1417;
+    border-bottom: 1px solid var(--red-line);
+    box-shadow: 0 4px 20px rgba(248, 81, 73, 0.12);
   }
 
-  #shareUrl {
+  .px-link-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .px-link-field-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
     flex: 1;
     min-width: 0;
-    height: var(--control-h);
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid var(--amber-line);
-    color: var(--text);
-    font-family: var(--mono);
-    font-size: 0.82rem;
-    padding: 0 0.75rem;
-    border-radius: 7px;
-    outline: none;
-    text-overflow: ellipsis;
   }
 
-  .header-share-banner.is-burn #shareUrl { border-color: var(--red-line); }
-  #shareUrl:focus { border-color: var(--amber); }
+  #shareUrl,
+  .px-link-input {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    width: 100%;
+    height: var(--control-h);
+    background: #0d1117;
+    border: 1px solid var(--amber-line);
+    color: #f0f6fc;
+    font-family: var(--mono);
+    font-size: 0.84rem;
+    padding: 0 0.85rem;
+    border-radius: var(--radius-sm);
+    outline: none;
+    text-overflow: ellipsis;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+  }
 
-  /* Icon only, at every width — no breakpoint, no second layout to keep in
-     sync. The "Copy Link" label cost ~75px that the URL field needs more, and
-     the URL is the whole point of this row. The amber fill stays: that is what
-     marks this as the action of the row rather than the icon-shaped
-     new-paste button beside it. */
-  #copyShareBtn { width: var(--control-h); padding: 0; }
+  .header-share-banner.is-burn #shareUrl,
+  .px-link-bar.is-burn .px-link-input {
+    border-color: var(--red-line);
+    color: #ff7b72;
+    padding-right: 6.5rem;
+  }
 
-  /* No label left to read "Copied!", so the button itself confirms — the same
-     green flash every other copy control in px0 uses. */
-  .btn-save.copied {
-    background: var(--green-fill);
-    color: var(--green);
-    box-shadow: none;
+  #shareUrl:focus,
+  .px-link-input:focus {
+    border-color: var(--amber);
+    box-shadow: 0 0 0 2px var(--amber-glow);
+    background: #10141d;
+  }
+
+  .header-share-banner.is-burn #shareUrl:focus,
+  .px-link-bar.is-burn .px-link-input:focus {
+    border-color: var(--red);
+    box-shadow: 0 0 0 2px rgba(248, 81, 73, 0.25);
+  }
+
+  .px-burn-badge {
+    position: absolute;
+    right: 6px;
+    font-size: 0.68rem;
+    font-family: var(--mono);
+    font-weight: 700;
+    color: var(--red);
+    background: rgba(248, 81, 73, 0.15);
+    border: 1px solid rgba(248, 81, 73, 0.4);
+    padding: 2px 7px;
+    border-radius: 4px;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+
+  .px-link-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-shrink: 0;
+  }
+
+  .px-btn-copy {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    height: var(--control-h);
+    padding: 0 0.85rem;
+    font-weight: 600;
+    font-size: 0.82rem;
+  }
+
+  .px-btn-copy .px-btn-label {
+    display: inline-block;
+  }
+
+  /* Success flash animation when copied */
+  .btn-save.copied,
+  .btn-action.copied {
+    background: var(--green-fill) !important;
+    color: var(--green) !important;
+    border-color: var(--green-line) !important;
+    box-shadow: none !important;
   }
 
   @media (max-width: 767px) {
@@ -896,8 +962,37 @@ export const LANDING_CSS = `
       border-top: 1px solid var(--border);
     }
 
-    .inline-pass-bar.visible { max-width: 170px; }
-    .inline-pass-input { width: 100px; }
+    .inline-pass-bar.visible { max-width: 150px; }
+    .inline-pass-input { width: 95px; }
+
+    .header-share-banner,
+    .px-link-bar {
+      padding: 0.6rem 0.85rem;
+    }
+  }
+
+  @media (max-width: 520px) {
+    .header-share-banner,
+    .px-link-bar {
+      padding: 0.5rem 0.75rem;
+    }
+
+    .px-link-container {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0.5rem;
+    }
+
+    .px-link-actions {
+      justify-content: flex-end;
+    }
+
+    .px-btn-copy {
+      flex: 1;
+    }
+
+    .inline-pass-bar.visible { max-width: 125px; }
+    .inline-pass-input { width: 75px; }
   }
 `;
 

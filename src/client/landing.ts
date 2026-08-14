@@ -1,4 +1,11 @@
-import { copyIcon, globeSvg, lockIcon, plusIcon } from "../icons";
+import {
+  closeIcon,
+  copyIcon,
+  externalLinkIcon,
+  globeSvg,
+  lockIcon,
+  plusIcon,
+} from "../icons";
 import { ENC_PREFIX, MAX_PASTE_BYTES, PASS_PREFIX } from "../utils";
 import {
   bytesToBase64Url,
@@ -495,18 +502,34 @@ function showShareLink(url: string, isBurn: boolean) {
 
   const banner = document.createElement("div");
   banner.id = "headerShareBanner";
-  // The banner appearing is the message — it used to also carry a
-  // "Paste created" badge saying so. Burn still reads as burn: the row keeps
-  // its red ground and red field border via `is-burn`.
-  banner.className = `header-share-banner${isBurn ? " is-burn" : ""}`;
+  banner.className = `header-share-banner px-link-bar${isBurn ? " is-burn" : ""}`;
   banner.innerHTML = `
-    <input type="text" id="shareUrl" readonly value="${fullUrl}" aria-label="Share link">
-    <button type="button" id="copyShareBtn" class="btn-save" title="Copy link to clipboard" aria-label="Copy link to clipboard">
-      ${copyIcon}
-    </button>
-    <button type="button" id="createNewBtn" class="btn-action" title="Create another paste">
-      ${plusIcon}
-    </button>
+    <div class="px-link-container">
+      <div class="px-link-field-wrap">
+        <input type="text" id="shareUrl" class="px-link-input" readonly value="${fullUrl}" aria-label="Share link" spellcheck="false" autocomplete="off">
+        ${isBurn ? '<span class="px-burn-badge" title="Self-destructs after first view">🔥 1 View Only</span>' : ""}
+      </div>
+      <div class="px-link-actions">
+        <button type="button" id="copyShareBtn" class="btn-save px-btn-copy" title="Copy link (Ctrl+C / Enter)" aria-label="Copy link to clipboard">
+          ${copyIcon}
+          <span class="px-btn-label">Copy</span>
+        </button>
+        ${
+          !isBurn
+            ? `
+        <a href="${fullUrl}" target="_blank" rel="noopener noreferrer" id="openShareBtn" class="btn-action px-btn-open" title="Open paste in new tab" aria-label="Open paste in new tab">
+          ${externalLinkIcon}
+        </a>`
+            : ""
+        }
+        <button type="button" id="createNewBtn" class="btn-action px-btn-new" title="Create another paste" aria-label="Create another paste">
+          ${plusIcon}
+        </button>
+        <button type="button" id="closeBannerBtn" class="btn-action px-btn-close" title="Dismiss banner (Esc)" aria-label="Dismiss banner">
+          ${closeIcon}
+        </button>
+      </div>
+    </div>
   `;
 
   const header = document.querySelector("header");
@@ -517,16 +540,37 @@ function showShareLink(url: string, isBurn: boolean) {
   const urlInput = document.getElementById(
     "shareUrl",
   ) as HTMLInputElement | null;
-  urlInput?.select();
-
   const copyBtn = document.getElementById(
     "copyShareBtn",
   ) as HTMLButtonElement | null;
+  const closeBtn = document.getElementById(
+    "closeBannerBtn",
+  ) as HTMLButtonElement | null;
 
-  copyBtn?.addEventListener("click", () => {
+  const performCopy = () => {
+    urlInput?.focus();
     urlInput?.select();
     copyToClipboard(fullUrl);
     flashCopied(copyBtn);
+  };
+
+  // Immediate focus & auto-copy for fast friction-free workflow
+  performCopy();
+
+  copyBtn?.addEventListener("click", performCopy);
+
+  urlInput?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      performCopy();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      banner.remove();
+    }
+  });
+
+  closeBtn?.addEventListener("click", () => {
+    banner.remove();
   });
 
   document.getElementById("createNewBtn")?.addEventListener("click", () => {
