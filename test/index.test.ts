@@ -1,11 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import {
+  deriveKeyFromPassword,
   formatTimeLeft,
   generate8CharPassword,
   renderMarkdown,
   sanitizeOutputHtml,
 } from "../src/client/shared";
-import app from "../src/index";
+import app, { pruneRateLimitMap, rateLimitMap } from "../src/index";
 import {
   bytesToBase64,
   bytesToBase64Url,
@@ -67,6 +68,17 @@ describe("Pastebin Core Utilities & Security", () => {
     expect(getTtlSeconds("1d")).toBe(86400);
     expect(getTtlSeconds("30d")).toBe(2592000);
     expect(getTtlSeconds("invalid")).toBe(2592000); // defaults to 30d
+  });
+
+  test("deriveKeyFromPassword successfully derives key even with sliced Uint8Array salt", async () => {
+    const parentBuf = new Uint8Array([
+      0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+    ]);
+    const slicedSalt = parentBuf.subarray(4, 20); // 16 bytes with byteOffset = 4
+    expect(slicedSalt.byteOffset).toBe(4);
+    const key = await deriveKeyFromPassword("test-password-123", slicedSalt);
+    expect(key).toBeDefined();
+    expect(key.algorithm.name).toBe("AES-GCM");
   });
 });
 
@@ -517,5 +529,28 @@ describe("Hono Security & Route Handlers", () => {
     expect(csp).toContain("frame-ancestors 'none'");
     expect(csp).toContain("script-src 'self'");
     expect(csp).not.toContain("script-src 'self' 'unsafe-inline'");
+  });
+
+  test("Rate limiter prunes expired entries and caps maximum entries", () => {
+    rateLimitMap.clear();
+    const now = Date.now();
+    // Add expired entries
+    for (let i = 0; i < 250; i++) {
+      rateLimitMap.set(`10.0.0.${i}`, { count: 1, resetAt: now - 1000 });
+    }
+    pruneRateLimitMap(now);
+    expect(rateLimitMap.size).toBe(0);
+
+    // Test hard cap enforcement
+    for (let i = 0; i < 2100; i++) {
+      rateLimitMap.set(`192.168.${Math.floor(i / 256)}.${i % 256}`, {
+        count: 1,
+        resetAt: now + 60000,
+      });
+    }
+    expect(rateLimitMap.size).toBe(2100);
+    pruneRateLimitMap(now);
+    expect(rateLimitMap.size).toBeLessThanOrEqual(2000);
+    rateLimitMap.clear();
   });
 });

@@ -110,17 +110,25 @@ export function renderMarkdown(md: string): string {
 
 export function copyToClipboard(text: string) {
   if (navigator.clipboard?.writeText) {
-    navigator.clipboard.writeText(text).catch(() => {});
+    navigator.clipboard.writeText(text).catch(() => {
+      fallbackCopyToClipboard(text);
+    });
     return;
   }
-  const ta = document.createElement("textarea");
-  ta.value = text;
-  ta.style.position = "fixed";
-  ta.style.opacity = "0";
-  document.body.appendChild(ta);
-  ta.select();
-  document.execCommand("copy");
-  document.body.removeChild(ta);
+  fallbackCopyToClipboard(text);
+}
+
+function fallbackCopyToClipboard(text: string) {
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    document.body.removeChild(ta);
+  } catch {}
 }
 
 // Flashes a button into its `copied` state for visual confirmation.
@@ -132,7 +140,7 @@ export function flashCopied(el: Element | null, ms = 2000) {
 
 export async function deriveKeyFromPassword(
   password: string,
-  salt: Uint8Array,
+  salt: Uint8Array<ArrayBuffer>,
 ): Promise<CryptoKey> {
   const enc = new TextEncoder();
   const masterKey = await crypto.subtle.importKey(
@@ -145,7 +153,7 @@ export async function deriveKeyFromPassword(
   return crypto.subtle.deriveKey(
     {
       name: "PBKDF2",
-      salt: salt.buffer as ArrayBuffer,
+      salt: salt,
       iterations: 600000,
       hash: "SHA-256",
     },

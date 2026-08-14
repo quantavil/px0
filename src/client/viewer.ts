@@ -26,8 +26,14 @@ function initPx0Data() {
   const el = document.getElementById("px0-data");
   if (el) {
     const expiresAtAttr = el.getAttribute("data-expires-at");
+    let rawContent = "";
+    try {
+      rawContent = JSON.parse(el.textContent?.trim() ?? '""');
+    } catch {
+      rawContent = el.textContent?.trim() ?? "";
+    }
     window.__PX0_DATA__ = {
-      rawContent: JSON.parse(el.textContent?.trim() ?? ""),
+      rawContent,
       isEncrypted: el.getAttribute("data-encrypted") === "true",
       isPasswordProtected: el.getAttribute("data-password") === "true",
       expiresAtMs:

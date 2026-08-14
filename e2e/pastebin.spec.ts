@@ -75,36 +75,41 @@ test.describe('px0 E2E Browser Test Suite', () => {
     await page.locator('button[type="submit"]').click();
     await expect(page.locator('#headerShareBanner')).toBeVisible();
     const fullUrlWithHash = await page.locator('#shareUrl').inputValue();
-    await page.goto(fullUrlWithHash);
+    
+    // Open in a new page to test viewer lifecycle
+    const viewPage = await context.newPage();
+    await viewPage.goto(fullUrlWithHash);
     expect(fullUrlWithHash).toContain('#');
 
     // Wait for client Web Crypto decryption to complete and inject h1 element
-    await page.waitForSelector('#output h1');
+    await viewPage.waitForSelector('#output h1');
 
     // Verify browser decrypted payload and rendered formatted markdown
-    await expect(page.locator('.badge-encrypted')).toContainText('E2EE');
-    await expect(page.locator('#output h1')).toHaveText('Top Secret E2EE Note');
-    await expect(page.locator('#output code')).toHaveText('super-secret-123');
+    await expect(viewPage.locator('.badge-encrypted')).toContainText('E2EE');
+    await expect(viewPage.locator('#output h1')).toHaveText('Top Secret E2EE Note');
+    await expect(viewPage.locator('#output code')).toHaveText('super-secret-123');
 
     // /raw only ever sees ciphertext, so the button must not be offered here —
     // it used to appear the moment decryption revealed the action bar, handing
     // the reader `__PX0_ENC__:…`. Download replaces it and works on the
     // decrypted text.
-    await expect(page.locator('#rawBtn')).toHaveCount(0);
-    const downloadPromise = page.waitForEvent('download');
-    await page.locator('#downloadBtn').click();
+    await expect(viewPage.locator('#rawBtn')).toHaveCount(0);
+    const downloadPromise = viewPage.waitForEvent('download');
+    await viewPage.locator('#downloadBtn').click();
     const download = await downloadPromise;
     expect(download.suggestedFilename()).toMatch(/^[A-Za-z0-9\-_]{8}\.md$/);
 
-    // Open URL without hash fragment -> verify decryption missing key error message
+    // Open URL without hash fragment -> verify interactive decryption key missing card
     const urlWithoutHash = fullUrlWithHash.split('#')[0];
     const page2 = await context.newPage();
     await page2.goto(urlWithoutHash);
-    await expect(page2.locator('#output')).toContainText('Error: Decryption key missing from URL hash fragment!');
+    await expect(page2.locator('.unlock-title')).toHaveText('Decryption Key Required');
+    await expect(page2.locator('#manualKeyInput')).toBeVisible();
 
     // Open URL with invalid hash fragment -> verify invalid key error message
     await page2.goto(urlWithoutHash + '#invalidKey123');
-    await expect(page2.locator('#output')).toContainText('Error: Invalid decryption key or corrupted payload.');
+    await expect(page2.locator('.unlock-title')).toHaveText('Decryption Failed');
+    await expect(page2.locator('#keyErr')).toContainText('Error: Decryption key is invalid or corrupted.');
   });
 
   test('4. 404 Expired or missing paste page', async ({ page }) => {
@@ -346,9 +351,8 @@ func main() {
     await expect(page.locator('header')).toHaveCSS('height', '52px');
     await expect(page.locator('.badge-public')).toContainText('Plaintext');
     // A badge's text, fill and border must all come from one colour token.
-    // This previously rendered amber text on blue chrome.
-    await expect(page.locator('.badge-public')).toHaveCSS('color', 'rgb(88, 166, 255)');
-    await expect(page.locator('.badge-public')).toHaveCSS('border-color', 'rgba(88, 166, 255, 0.3)');
+    await expect(page.locator('.badge-public')).toHaveCSS('color', 'rgb(15, 182, 214)');
+    await expect(page.locator('.badge-public')).toHaveCSS('border-color', 'rgba(15, 182, 214, 0.35)');
     await expect(page.locator('.markdown-body h1')).toHaveText('Visual Consistency Paste');
 
     // Tables must actually render as tables — GFM tables had no styling at all,

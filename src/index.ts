@@ -118,19 +118,36 @@ async function readPaste(
 }
 
 // In-memory rate limiting map (30 pastes / minute per IP)
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+export const rateLimitMap = new Map<
+  string,
+  { count: number; resetAt: number }
+>();
+const MAX_RATE_LIMIT_ENTRIES = 2000;
 
-function pruneRateLimitMap(now: number) {
-  if (rateLimitMap.size > 500) {
+export function pruneRateLimitMap(now: number) {
+  if (rateLimitMap.size > 200) {
     for (const [ip, record] of rateLimitMap.entries()) {
       if (now > record.resetAt) {
         rateLimitMap.delete(ip);
       }
     }
   }
+  // Hard cap to prevent unbounded memory growth under high IP churn
+  if (rateLimitMap.size > MAX_RATE_LIMIT_ENTRIES) {
+    const excess = rateLimitMap.size - MAX_RATE_LIMIT_ENTRIES;
+    let count = 0;
+    for (const ip of rateLimitMap.keys()) {
+      rateLimitMap.delete(ip);
+      if (++count >= excess) break;
+    }
+  }
 }
 
-function isRateLimited(ip: string, limit = 30, windowMs = 60000): boolean {
+export function isRateLimited(
+  ip: string,
+  limit = 30,
+  windowMs = 60000,
+): boolean {
   const now = Date.now();
   pruneRateLimitMap(now);
   const record = rateLimitMap.get(ip);

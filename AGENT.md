@@ -34,5 +34,5 @@
 - **E2EE Address Bar Hash Sync:** Browser URL bar didn't update to include `#secretKey` on paste creation. Fix: Call `history.pushState(null, "", fullUrl)` in `showShareLink()`.
 - **Missing E2EE Key Recovery UI:** Missing `#key` rendered plain red error text. Fix: Interactive "Decryption Key Required" card allowing manual key entry.
 - **Burn-After-Read E2EE Hash Loss:** Clicking "Reveal & Self-Destruct" on a burn paste navigated to `/${id}?confirm=1` without `#secretKey`. Fix: Load `viewer.js` on interstitial and append `window.location.hash` to `#revealBtn`.
-
-
+- **PBKDF2 Salt Buffer Offset:** Passing `salt.buffer` ignores Uint8Array byte offsets. Fix: Pass `salt` (`Uint8Array<ArrayBuffer>`) directly to Web Crypto.
+- **Rate Limit Map Memory Growth:** Unbounded IP map growth during traffic spikes. Fix: Enforce hard cap (2,000 entries) with FIFO eviction in `pruneRateLimitMap`.
