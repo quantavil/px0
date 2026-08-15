@@ -1,7 +1,9 @@
 import {
+  clockSvg,
   closeIcon,
   copyIcon,
   externalLinkIcon,
+  flameSvg,
   globeSvg,
   lockIcon,
   plusIcon,
@@ -471,90 +473,147 @@ function initLanding() {
         }
         setSaveBusy(null);
 
-        const shareUrl = `/${data.id}${
+        const pasteUrl = `/${data.id}${
           secretKeyBase64 && passwordVal.length === 0
             ? `#${secretKeyBase64}`
             : ""
         }`;
 
-        // Every creation flow (burn, password, E2EE, TTL) shows the same share
-        // overlay instead of redirecting. Keeps the UX consistent, and a burn
-        // paste is never consumed by the creator's own redirect.
-        showShareLink(shareUrl, selectedTtl === "burn");
+        const modeType =
+          passwordVal.length > 0 ? "password" : isE2ee ? "e2ee" : "plaintext";
+        const ttlLabel = ttlValue?.textContent?.trim() || "30 Days";
+
+        showSuccessModal(pasteUrl, selectedTtl === "burn", modeType, ttlLabel);
       }
     });
   }
 }
 
-// Shows the share link as a banner row inserted directly under the header.
-// It deliberately carries no overlay/modal class: an earlier version also
-// applied `.share-overlay` (position: fixed; inset: 0; backdrop-filter: blur),
-// which turned this into a full-screen sheet that blurred and blocked the
-// entire editor behind it.
-function showShareLink(url: string, isBurn: boolean) {
+// Displays the paste result as a focused, high-contrast, centered modal card
+function showSuccessModal(
+  url: string,
+  isBurn: boolean,
+  mode: "e2ee" | "password" | "plaintext",
+  ttlLabel: string,
+) {
   const fullUrl = window.location.origin + url;
 
   try {
     window.history.pushState(null, "", fullUrl);
   } catch {}
 
-  document.getElementById("headerShareBanner")?.remove();
+  document.getElementById("pxModalOverlay")?.remove();
 
-  const banner = document.createElement("div");
-  banner.id = "headerShareBanner";
-  banner.className = `header-share-banner px-link-bar${isBurn ? " is-burn" : ""}`;
-  banner.innerHTML = `
-    <div class="px-link-container">
-      <div class="px-link-field-wrap">
-        <input type="text" id="shareUrl" class="px-link-input" readonly value="${fullUrl}" aria-label="Share link" spellcheck="false" autocomplete="off">
-        ${isBurn ? '<span class="px-burn-badge" title="Self-destructs after first view">🔥 1 View Only</span>' : ""}
-      </div>
-      <div class="px-link-actions">
-        <button type="button" id="copyShareBtn" class="btn-save px-btn-copy" title="Copy link (Ctrl+C / Enter)" aria-label="Copy link to clipboard">
-          ${copyIcon}
-          <span class="px-btn-label">Copy</span>
+  const overlay = document.createElement("div");
+  overlay.id = "pxModalOverlay";
+  overlay.className = "px-modal-overlay";
+
+  const securityBadgeHtml =
+    mode === "password"
+      ? `${lockIcon} Password Protected`
+      : mode === "e2ee"
+        ? `${lockIcon} Zero-Knowledge E2EE`
+        : `${globeSvg} Plaintext (Public)`;
+
+  const expiryBadgeHtml = isBurn
+    ? `${flameSvg} Burn After Read (1 View)`
+    : `${clockSvg} ${ttlLabel}`;
+
+  overlay.innerHTML = `
+    <div id="pxModalCard" class="px-modal-card${isBurn ? " is-burn" : ""}" role="dialog" aria-modal="true" aria-labelledby="pxModalTitle">
+      <div class="px-modal-header">
+        <div class="px-modal-title-wrap">
+          <span class="px-modal-icon">${isBurn ? flameSvg : lockIcon}</span>
+          <h2 id="pxModalTitle" class="px-modal-title">${isBurn ? "Burn-After-Read Ready" : "Paste Link Ready"}</h2>
+        </div>
+        <button type="button" id="pxModalCloseBtn" class="btn-action px-modal-close" title="Close modal (Esc)" aria-label="Close modal">
+          ${closeIcon}
         </button>
+      </div>
+
+      <div class="px-modal-badges">
+        <span class="badge ${mode === "plaintext" ? "badge-public" : "badge-encrypted"}">${securityBadgeHtml}</span>
+        <span class="badge ${isBurn ? "badge-burn-once" : "badge-ttl"}">${expiryBadgeHtml}</span>
+      </div>
+
+      <div class="px-modal-link-box">
+        <input type="text" id="pxPasteUrl" class="px-modal-input" readonly value="${fullUrl}" aria-label="Paste URL" spellcheck="false" autocomplete="off">
+        <button type="button" id="pxModalCopyBtn" class="btn-save px-modal-copy-btn" title="Copy link to clipboard (Enter / Ctrl+C)" aria-label="Copy link to clipboard">
+          ${copyIcon}
+          <span class="px-modal-copy-text">Copy</span>
+        </button>
+      </div>
+
+      ${
+        isBurn
+          ? `
+      <div class="px-modal-burn-warning">
+        <div class="px-burn-warn-icon">${flameSvg}</div>
+        <div class="px-burn-warn-text">
+          <strong>One-time view only:</strong> Opening this link will immediately and permanently delete the paste. Do not open it if you intend to send it to someone else!
+        </div>
+      </div>
+      `
+          : ""
+      }
+
+      <div class="px-modal-actions">
         ${
           !isBurn
             ? `
-        <a href="${fullUrl}" target="_blank" rel="noopener noreferrer" id="openShareBtn" class="btn-action px-btn-open" title="Open paste in new tab" aria-label="Open paste in new tab">
+        <a href="${fullUrl}" target="_blank" rel="noopener noreferrer" id="pxModalOpenBtn" class="btn-action px-modal-btn" title="Open paste in new tab">
           ${externalLinkIcon}
-        </a>`
+          <span>Open</span>
+        </a>
+        `
             : ""
         }
-        <button type="button" id="createNewBtn" class="btn-action px-btn-new" title="Create another paste" aria-label="Create another paste">
+        <button type="button" id="pxModalNewBtn" class="btn-action px-modal-btn" title="Create another paste">
           ${plusIcon}
+          <span>New Paste</span>
         </button>
-        <button type="button" id="closeBannerBtn" class="btn-action px-btn-close" title="Dismiss banner (Esc)" aria-label="Dismiss banner">
-          ${closeIcon}
+        <button type="button" id="pxModalDoneBtn" class="btn-action px-modal-btn px-modal-done" title="Close and continue editing">
+          Done
         </button>
       </div>
     </div>
   `;
 
-  const header = document.querySelector("header");
-  header?.parentNode
-    ? header.parentNode.insertBefore(banner, header.nextSibling)
-    : document.body.insertBefore(banner, document.body.firstChild);
+  document.body.appendChild(overlay);
 
   const urlInput = document.getElementById(
-    "shareUrl",
+    "pxPasteUrl",
   ) as HTMLInputElement | null;
   const copyBtn = document.getElementById(
-    "copyShareBtn",
+    "pxModalCopyBtn",
   ) as HTMLButtonElement | null;
+  const copyText = copyBtn?.querySelector(".px-modal-copy-text");
   const closeBtn = document.getElementById(
-    "closeBannerBtn",
+    "pxModalCloseBtn",
   ) as HTMLButtonElement | null;
+  const doneBtn = document.getElementById(
+    "pxModalDoneBtn",
+  ) as HTMLButtonElement | null;
+
+  const closeModal = () => {
+    overlay.classList.add("closing");
+    setTimeout(() => overlay.remove(), 160);
+  };
 
   const performCopy = () => {
     urlInput?.focus();
     urlInput?.select();
     copyToClipboard(fullUrl);
     flashCopied(copyBtn);
+    if (copyText) {
+      copyText.textContent = "Copied!";
+      setTimeout(() => {
+        if (copyText) copyText.textContent = "Copy";
+      }, 2000);
+    }
   };
 
-  // Immediate focus & auto-copy for fast friction-free workflow
+  // Immediate focus & auto-copy
   performCopy();
 
   copyBtn?.addEventListener("click", performCopy);
@@ -563,17 +622,28 @@ function showShareLink(url: string, isBurn: boolean) {
     if (e.key === "Enter") {
       e.preventDefault();
       performCopy();
-    } else if (e.key === "Escape") {
-      e.preventDefault();
-      banner.remove();
     }
   });
 
-  closeBtn?.addEventListener("click", () => {
-    banner.remove();
+  closeBtn?.addEventListener("click", closeModal);
+  doneBtn?.addEventListener("click", closeModal);
+
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) {
+      closeModal();
+    }
   });
 
-  document.getElementById("createNewBtn")?.addEventListener("click", () => {
+  const handleKeydown = (e: KeyboardEvent) => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      document.removeEventListener("keydown", handleKeydown);
+      closeModal();
+    }
+  };
+  document.addEventListener("keydown", handleKeydown);
+
+  document.getElementById("pxModalNewBtn")?.addEventListener("click", () => {
     window.location.reload();
   });
 }

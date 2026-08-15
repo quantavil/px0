@@ -817,124 +817,236 @@ export const LANDING_CSS = `
     background: rgba(255, 255, 255, 0.08);
   }
 
-  /* Share banner: a real row in the document flow directly under the header.
-     Ad-block immune, high contrast, fully accessible with mobile/tablet layouts. */
-  .header-share-banner,
-  .px-link-bar {
-    display: flex !important;
+  /* Centered Modal Dialog for Post-Save Flow */
+  .px-modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
     align-items: center;
+    justify-content: center;
+    padding: 1.25rem;
+    background: rgba(10, 12, 16, 0.78);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    animation: px-fade-in 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  .px-modal-overlay.closing {
+    animation: px-fade-out 0.15s ease forwards;
+  }
+
+  @keyframes px-fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes px-fade-out {
+    from { opacity: 1; }
+    to { opacity: 0; }
+  }
+
+  .px-modal-card {
+    position: relative;
     width: 100%;
-    padding: 0.65rem 1.25rem;
+    max-width: 520px;
     background: #161b22;
-    border-bottom: 1px solid var(--amber-line);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
-    flex-shrink: 0;
-    z-index: 9;
-    animation: px-slide-down 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    border: 1px solid var(--border-hover);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.06);
+    display: flex;
+    flex-direction: column;
+    gap: 1.1rem;
+    animation: px-card-pop 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   }
 
-  @keyframes px-slide-down {
-    from { transform: translateY(-8px); opacity: 0; }
-    to { transform: translateY(0); opacity: 1; }
+  .px-modal-overlay.closing .px-modal-card {
+    animation: px-card-shrink 0.15s ease forwards;
   }
 
-  .header-share-banner.is-burn,
-  .px-link-bar.is-burn {
-    background: #1c1417;
-    border-bottom: 1px solid var(--red-line);
-    box-shadow: 0 4px 20px rgba(248, 81, 73, 0.12);
+  @keyframes px-card-pop {
+    from { opacity: 0; transform: scale(0.94) translateY(10px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
   }
 
-  .px-link-container {
+  @keyframes px-card-shrink {
+    from { opacity: 1; transform: scale(1); }
+    to { opacity: 0; transform: scale(0.95); }
+  }
+
+  .px-modal-card.is-burn {
+    border-color: rgba(248, 81, 73, 0.45);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7), 0 0 25px rgba(248, 81, 73, 0.15);
+  }
+
+  .px-modal-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 0.75rem;
-    width: 100%;
-    min-width: 0;
   }
 
-  .px-link-field-wrap {
-    position: relative;
+  .px-modal-title-wrap {
     display: flex;
     align-items: center;
-    flex: 1;
-    min-width: 0;
+    gap: 0.65rem;
   }
 
-  #shareUrl,
-  .px-link-input {
-    display: block !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    width: 100%;
-    height: var(--control-h);
-    background: #0d1117;
+  .px-modal-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: var(--amber-fill);
     border: 1px solid var(--amber-line);
-    color: #f0f6fc;
-    font-family: var(--mono);
-    font-size: 0.84rem;
-    padding: 0 0.85rem;
-    border-radius: var(--radius-sm);
-    outline: none;
-    text-overflow: ellipsis;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+    color: var(--amber);
+    flex-shrink: 0;
   }
 
-  .header-share-banner.is-burn #shareUrl,
-  .px-link-bar.is-burn .px-link-input {
+  .px-modal-card.is-burn .px-modal-icon {
+    background: var(--red-fill);
     border-color: var(--red-line);
-    color: #ff7b72;
-    padding-right: 6.5rem;
+    color: var(--red);
   }
 
-  #shareUrl:focus,
-  .px-link-input:focus {
+  .px-modal-icon svg {
+    width: 17px;
+    height: 17px;
+  }
+
+  .px-modal-title {
+    font-size: 1.12rem;
+    font-weight: 700;
+    color: #f0f6fc;
+    letter-spacing: -0.02em;
+    margin: 0;
+  }
+
+  .px-modal-close {
+    width: 30px;
+    height: 30px;
+  }
+
+  .px-modal-badges {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .badge-ttl {
+    background: rgba(15, 182, 214, 0.12);
+    border-color: rgba(15, 182, 214, 0.35);
+    color: #58a6ff;
+  }
+
+  .px-modal-link-box {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: #0d1117;
+    border: 1px solid var(--border-hover);
+    border-radius: var(--radius);
+    padding: 0.35rem 0.35rem 0.35rem 0.85rem;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+
+  .px-modal-link-box:focus-within {
     border-color: var(--amber);
     box-shadow: 0 0 0 2px var(--amber-glow);
-    background: #10141d;
   }
 
-  .header-share-banner.is-burn #shareUrl:focus,
-  .px-link-bar.is-burn .px-link-input:focus {
+  .px-modal-card.is-burn .px-modal-link-box:focus-within {
     border-color: var(--red);
     box-shadow: 0 0 0 2px rgba(248, 81, 73, 0.25);
   }
 
-  .px-burn-badge {
-    position: absolute;
-    right: 6px;
-    font-size: 0.68rem;
+  .px-modal-input {
+    flex: 1;
+    min-width: 0;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #f0f6fc;
     font-family: var(--mono);
-    font-weight: 700;
-    color: var(--red);
-    background: rgba(248, 81, 73, 0.15);
-    border: 1px solid rgba(248, 81, 73, 0.4);
-    padding: 2px 7px;
-    border-radius: 4px;
-    pointer-events: none;
-    white-space: nowrap;
+    font-size: 0.88rem;
+    text-overflow: ellipsis;
   }
 
-  .px-link-actions {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
+  .px-modal-copy-btn {
+    height: 34px;
+    padding: 0 1rem;
+    font-weight: 600;
+    font-size: 0.84rem;
+    border-radius: var(--radius-sm);
     flex-shrink: 0;
   }
 
-  .px-btn-copy {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    height: var(--control-h);
-    padding: 0 0.85rem;
-    font-weight: 600;
+  .px-modal-burn-warning {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.85rem 1rem;
+    background: rgba(248, 81, 73, 0.08);
+    border: 1px solid rgba(248, 81, 73, 0.3);
+    border-radius: var(--radius);
+    color: #f0883e;
     font-size: 0.82rem;
+    line-height: 1.45;
   }
 
-  .px-btn-copy .px-btn-label {
-    display: inline-block;
+  .px-burn-warn-icon {
+    flex-shrink: 0;
+    color: var(--red);
+    margin-top: 1px;
+  }
+
+  .px-burn-warn-icon svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .px-burn-warn-text {
+    flex: 1;
+    color: #ff7b72;
+  }
+
+  .px-burn-warn-text strong {
+    color: #ffa198;
+    display: block;
+    margin-bottom: 2px;
+  }
+
+  .px-modal-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.6rem;
+    margin-top: 0.25rem;
+  }
+
+  .px-modal-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    height: 34px;
+    padding: 0 0.95rem;
+    font-size: 0.82rem;
+    font-weight: 500;
+    width: auto;
+  }
+
+  .px-modal-done {
+    background: rgba(255, 255, 255, 0.08);
+    color: #f0f6fc;
+  }
+
+  .px-modal-done:hover {
+    background: rgba(255, 255, 255, 0.14);
+    color: #ffffff;
   }
 
   /* Success flash animation when copied */
@@ -945,6 +1057,7 @@ export const LANDING_CSS = `
     border-color: var(--green-line) !important;
     box-shadow: none !important;
   }
+
 
   @media (max-width: 767px) {
     textarea, .preview-pane { padding: 1.25rem 1rem; }
@@ -964,31 +1077,39 @@ export const LANDING_CSS = `
 
     .inline-pass-bar.visible { max-width: 150px; }
     .inline-pass-input { width: 95px; }
-
-    .header-share-banner,
-    .px-link-bar {
-      padding: 0.6rem 0.85rem;
-    }
   }
 
   @media (max-width: 520px) {
-    .header-share-banner,
-    .px-link-bar {
-      padding: 0.5rem 0.75rem;
+    .px-modal-card {
+      padding: 1.2rem;
+      gap: 0.95rem;
     }
 
-    .px-link-container {
+    .px-modal-link-box {
+      flex-direction: column;
+      align-items: stretch;
+      padding: 0.5rem;
+      gap: 0.5rem;
+    }
+
+    .px-modal-input {
+      padding: 0.35rem 0.5rem;
+      font-size: 0.82rem;
+    }
+
+    .px-modal-copy-btn {
+      width: 100%;
+    }
+
+    .px-modal-actions {
       flex-direction: column;
       align-items: stretch;
       gap: 0.5rem;
     }
 
-    .px-link-actions {
-      justify-content: flex-end;
-    }
-
-    .px-btn-copy {
-      flex: 1;
+    .px-modal-btn {
+      justify-content: center;
+      width: 100%;
     }
 
     .inline-pass-bar.visible { max-width: 125px; }

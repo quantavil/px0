@@ -33,8 +33,8 @@ test.describe('px0 E2E Browser Test Suite', () => {
     await page.locator('#content').fill(markdownInput);
 
     await page.locator('button[type="submit"]').click();
-    await expect(page.locator('#headerShareBanner')).toBeVisible();
-    const urlStr = await page.locator('#shareUrl').inputValue();
+    await expect(page.locator('#pxModalOverlay')).toBeVisible();
+    const urlStr = await page.locator('#pxPasteUrl').inputValue();
     await page.goto(urlStr);
     expect(urlStr).not.toContain('#');
 
@@ -73,8 +73,8 @@ test.describe('px0 E2E Browser Test Suite', () => {
     await page.locator('#content').fill(secretText);
 
     await page.locator('button[type="submit"]').click();
-    await expect(page.locator('#headerShareBanner')).toBeVisible();
-    const fullUrlWithHash = await page.locator('#shareUrl').inputValue();
+    await expect(page.locator('#pxModalOverlay')).toBeVisible();
+    const fullUrlWithHash = await page.locator('#pxPasteUrl').inputValue();
     
     // Open in a new page to test viewer lifecycle
     const viewPage = await context.newPage();
@@ -180,8 +180,8 @@ func main() {
     await page.locator('#content').fill(multiLangInput);
 
     await page.locator('button[type="submit"]').click();
-    await expect(page.locator('#headerShareBanner')).toBeVisible();
-    const shareUrl = await page.locator('#shareUrl').inputValue();
+    await expect(page.locator('#pxModalOverlay')).toBeVisible();
+    const shareUrl = await page.locator('#pxPasteUrl').inputValue();
     await page.goto(shareUrl);
 
     await expect(page.locator('#output h1')).toHaveText('Multi-Language Syntax Highlight Test');
@@ -220,16 +220,14 @@ func main() {
     const sensitiveNote = '# Top Secret Burn Note\n\nSelf destructing after 1 view!';
     await page.locator('#content').fill(sensitiveNote);
 
-    // Creator is NOT redirected (that would burn it). A share-link overlay appears instead.
+    // Creator is NOT redirected (that would burn it). A centered modal card appears instead.
     await page.locator('button[type="submit"]').click();
-    await expect(page.locator('#headerShareBanner')).toBeVisible();
-    // No badge announces it — the banner's red ground is what marks a burn paste.
-    await expect(page.locator('#headerShareBanner')).toHaveClass(/is-burn/);
-    // The banner is a document-flow row, never a fixed full-screen overlay.
-    await expect(page.locator('#headerShareBanner')).toHaveCSS('position', 'static');
-    await expect(page.locator('#content')).toBeVisible();
+    await expect(page.locator('#pxModalOverlay')).toBeVisible();
+    // Modal card displays burn styling and warning
+    await expect(page.locator('#pxModalCard')).toHaveClass(/is-burn/);
+    await expect(page.locator('.px-modal-burn-warning')).toBeVisible();
 
-    const pasteUrl = await page.locator('#shareUrl').inputValue();
+    const pasteUrl = await page.locator('#pxPasteUrl').inputValue();
 
     // First actual view -> Displays interstitial, click Reveal to view & burn
     await page.goto(pasteUrl);
@@ -271,11 +269,9 @@ func main() {
     await page.locator('#inlinePassInput').fill('my-vault-pass-123');
 
     await page.locator('button[type="submit"]').click();
-    await expect(page.locator('#headerShareBanner')).toBeVisible();
-    // The password lives in the header bar, not the banner — the banner is the
-    // link and nothing else.
+    await expect(page.locator('#pxModalOverlay')).toBeVisible();
     await expect(page.locator('#inlinePassInput')).toHaveValue('my-vault-pass-123');
-    const passUrl = await page.locator('#shareUrl').inputValue();
+    const passUrl = await page.locator('#pxPasteUrl').inputValue();
     await page.goto(passUrl);
 
     await expect(page.locator('.badge-public')).toHaveCount(0);
