@@ -25,3 +25,4 @@
 - **New Paste Reloading View:** Modal "New Paste" called `location.reload()` on `/:id`. Fix: Navigate to `/` (`window.location.href = "/"`) instead.
 - **SSR Delete Button Hygiene:** Plaintext pastes rendered `#deleteBtn` in SSR for strangers. Fix: Default `#deleteBtn` to `display: none` in SSR.
 - **Theme Bootstrap Zero-FOUC:** Theme stored in `px0_theme` requires inline `<head>` script to prevent flash before paint.
+- **Viewer Natural Scroll:** Avoid pinning sticky footer over article content. Use natural document flow with footer resting at article bottom (`margin-top: auto`).
