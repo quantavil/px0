@@ -46,12 +46,8 @@ test.describe('px0 E2E Browser Test Suite', () => {
     // Verify sugar-high lexical token elements
     await expect(page.locator('#output .sh__token--keyword').first()).toHaveText('const');
 
-    // Test Copy Link button
-    await page.waitForLoadState('domcontentloaded');
-    await page.locator('#copyBtn').click();
-    await expect(page.locator('#copyBtn')).toHaveClass(/copied/);
-
     // Test Copy Content button
+    await page.waitForLoadState('domcontentloaded');
     await page.locator('#copyContentBtn').click();
     await expect(page.locator('#copyContentBtn')).toHaveClass(/copied/);
 
@@ -237,9 +233,8 @@ func main() {
     await expect(page.locator('.badge-burn-once')).toContainText('Burned');
     await expect(page.locator('#output h1')).toHaveText('Top Secret Burn Note');
 
-    // The paste is already deleted, so Copy Link, View Raw and Delete would all
+    // The paste is already deleted, so View Raw and Delete would all
     // be dead controls. Only the content still in the page is real.
-    await expect(page.locator('#copyBtn')).toHaveCount(0);
     await expect(page.locator('#rawBtn')).toHaveCount(0);
     await expect(page.locator('#deleteBtn')).toHaveCount(0);
     await expect(page.locator('#copyContentBtn')).toBeVisible();

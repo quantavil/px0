@@ -116,8 +116,8 @@ export const CSS_VARIABLES = `
 export const BASE_CSS = `
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
-  html, body {
-    height: 100%;
+  html {
+    min-height: 100%;
     background-color: var(--bg);
     background-image: radial-gradient(circle at 50% 0%, var(--bg-radial) 0%, var(--bg) 80%);
     color: var(--text);
@@ -125,7 +125,13 @@ export const BASE_CSS = `
     -webkit-font-smoothing: antialiased;
   }
 
-  body { display: flex; flex-direction: column; }
+  body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background-color: transparent;
+    color: inherit;
+  }
 
   /* One visible focus treatment for every interactive element. */
   :focus-visible {
@@ -152,43 +158,76 @@ export const BASE_CSS = `
     align-items: center;
     justify-content: space-between;
     padding: 0.5rem 1.25rem;
-    gap: 0.75rem;
+    gap: 0.6rem;
     flex-shrink: 0;
     z-index: 10;
   }
 
-  /* Wrapping matters below ~410px: brand + password bar + split + TTL trigger
-     overflow a 375px phone, and the landing page sets overflow:hidden, so the
-     TTL control was simply clipped off-screen instead of scrolling. */
   header {
     min-height: 52px;
     border-bottom: 1px solid var(--border);
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
   }
 
   .footer-bar {
     min-height: 52px;
     border-top: 1px solid var(--border);
-    flex-wrap: wrap;
+    margin-top: auto;
   }
 
   .left-group, .footer-left {
     display: flex;
     align-items: center;
-    gap: 0.85rem;
-    flex-wrap: wrap;
+    gap: 0.75rem;
+    flex-wrap: nowrap;
     min-width: 0;
   }
 
   .header-right, .footer-right, .nav-links {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    flex-wrap: wrap;
+    gap: 0.45rem;
+    flex-wrap: nowrap;
     justify-content: flex-end;
+    flex-shrink: 0;
   }
 
-  .header-right { gap: 0.6rem; }
+  @media (max-width: 640px) {
+    header, .footer-bar {
+      padding: 0.4rem 0.75rem;
+      gap: 0.4rem;
+      min-height: 48px;
+    }
+
+    .left-group, .footer-left {
+      gap: 0.4rem;
+    }
+
+    .header-right, .footer-right, .nav-links {
+      gap: 0.35rem;
+    }
+
+    .btn-action {
+      width: 30px;
+      height: 30px;
+    }
+
+    .btn-action svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    .badge {
+      padding: 0.2rem 0.45rem;
+      font-size: 0.7rem;
+      gap: 0.25rem;
+    }
+
+    .badge svg {
+      width: 12px;
+      height: 12px;
+    }
+  }
 
   .brand {
     display: inline-flex;
@@ -1262,7 +1301,6 @@ export const VIEWER_CSS = `
 
   main.viewer-container {
     flex: 1;
-    overflow-y: auto;
     width: 100%;
     display: flex;
     justify-content: center;

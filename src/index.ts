@@ -13,7 +13,6 @@ import {
   faviconSvg,
   flameSvg,
   globeSvg,
-  linkIcon,
   lockIcon,
   plusIcon,
   rawIcon,
@@ -561,15 +560,7 @@ app.get("/:id", async (c) => {
           <div class="nav-links">
             <button type="button" id="btnThemeToggle" class="btn-action" title="Toggle Theme" aria-label="Toggle Theme">${raw(sunIcon)}</button>
             <a href="/" class="btn-action" title="New Paste" aria-label="New Paste">${raw(plusIcon)}</a>
-            <div id="pasteActions" class="paste-actions" style="display: ${isPasswordProtected || isEncrypted ? "none" : "flex"}; gap: 0.5rem; align-items: center;">
-              ${
-                // A burned paste is already gone from storage: its link 404s and
-                // /raw 404s, so offering Copy Link and View Raw hands the reader
-                // two dead controls. Only the in-page content is still real.
-                isBurnAfterRead
-                  ? ""
-                  : html`<button type="button" class="btn-action" id="copyBtn" title="Copy Link" aria-label="Copy Link">${raw(linkIcon)}</button>`
-              }
+            <div id="pasteActions" class="paste-actions" style="display: ${isPasswordProtected || isEncrypted ? "none" : "flex"}; gap: 0.45rem; align-items: center;">
               <button type="button" class="btn-action" id="copyContentBtn" title="Copy Content" aria-label="Copy Content">${raw(copyIcon)}</button>
               <button type="button" class="btn-action" id="downloadBtn" title="Download as .md" aria-label="Download as Markdown">${raw(downloadIcon)}</button>
               ${

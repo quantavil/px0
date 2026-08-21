@@ -93,11 +93,6 @@ function revealPasteActions() {
   }
 }
 
-function copyLink() {
-  copyToClipboard(window.location.href);
-  flashCopied(document.getElementById("copyBtn"));
-}
-
 // The readable text of this paste: whatever was decrypted in-browser, or the
 // stored value when it was never encrypted. Never the ciphertext.
 function pasteText(): string {
@@ -303,11 +298,6 @@ async function initPageViewer() {
   if (!outputEl) return;
 
   // Bind click event listeners (moved from inline onclick attributes for CSP compliance)
-  const copyBtn = document.getElementById("copyBtn");
-  if (copyBtn && !copyBtn.dataset.bound) {
-    copyBtn.addEventListener("click", copyLink);
-    copyBtn.dataset.bound = "1";
-  }
   const copyContentBtn = document.getElementById("copyContentBtn");
   if (copyContentBtn && !copyContentBtn.dataset.bound) {
     copyContentBtn.addEventListener("click", copyContent);
