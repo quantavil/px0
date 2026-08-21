@@ -19,6 +19,7 @@ import {
   rawIcon,
   saveIcon,
   splitIcon,
+  sunIcon,
   trashIcon,
 } from "./icons";
 import {
@@ -38,6 +39,8 @@ import {
   PASS_PREFIX,
   TTL_MAP,
 } from "./utils";
+
+const THEME_BOOTSTRAP_SCRIPT = `<script>try{const t=localStorage.getItem("px0_theme")||"dark";document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>`;
 
 type Bindings = {
   PASTES_KV: KVNamespace;
@@ -211,6 +214,7 @@ app.get("/", (c) => {
         <meta name="description" content="Minimalist markdown pastebin with zero-knowledge encryption, password protection and burn-after-read.">
         <title>px0 - Minimalist Markdown Pastebin</title>
         <link rel="icon" type="image/svg+xml" href="/favicon.ico">
+        ${raw(THEME_BOOTSTRAP_SCRIPT)}
         <style>
           ${raw(CSS_VARIABLES)}
           ${raw(BASE_CSS)}
@@ -226,6 +230,9 @@ app.get("/", (c) => {
             </a>
 
             <div class="header-right">
+              <button type="button" id="btnThemeToggle" class="btn-action" title="Toggle Theme" aria-label="Toggle Theme">
+                ${raw(sunIcon)}
+              </button>
               <button type="button" id="btnPassModal" class="btn-action" title="Toggle Password Protection" aria-label="Toggle Password Protection" aria-pressed="false">
                 ${raw(lockIcon)}
               </button>
@@ -267,7 +274,8 @@ app.get("/", (c) => {
 
           <footer class="footer-bar">
             <div class="footer-left">
-              <span id="charCount" class="stats-label">›_ 0 lines (0 chars)</span>
+              <span id="charCount" class="stats-label">›_ 0 lines (0 B / 5MB)</span>
+              <span id="draftContainer"></span>
               <label class="toggle-e2ee" title="Click to toggle Zero-Knowledge Encryption">
                 <input type="checkbox" id="e2eeToggle" checked>
                 <span class="badge badge-encrypted" id="toggleLabel">${raw(lockIcon)} E2EE</span>
@@ -416,6 +424,7 @@ app.get("/:id", async (c) => {
           <meta name="theme-color" content="#161b22">
           <title>404 - Paste Unavailable | px0</title>
           <link rel="icon" type="image/svg+xml" href="/favicon.ico">
+          ${raw(THEME_BOOTSTRAP_SCRIPT)}
           <style>
           ${raw(CSS_VARIABLES)}
           ${raw(BASE_CSS)}
@@ -425,13 +434,17 @@ app.get("/:id", async (c) => {
         <body>
           <header>
             <a href="/" class="brand" title="px0 homepage">${raw(brandIcon)}</a>
-            <a href="/" class="btn-action" title="New Paste" aria-label="New Paste">${raw(plusIcon)}</a>
+            <div class="nav-links">
+              <button type="button" id="btnThemeToggle" class="btn-action" title="Toggle Theme" aria-label="Toggle Theme">${raw(sunIcon)}</button>
+              <a href="/" class="btn-action" title="New Paste" aria-label="New Paste">${raw(plusIcon)}</a>
+            </div>
           </header>
           <main class="not-found-wrapper">
             <div class="status-code">404</div>
             <h1 class="not-found-title">Paste Unavailable</h1>
             <p class="not-found-subtitle">This paste has expired, self-destructed after reading, or never existed.</p>
           </main>
+          <script src="/static/viewer.js" defer></script>
         </body>
         </html>
       `,
@@ -457,6 +470,7 @@ app.get("/:id", async (c) => {
           <meta name="theme-color" content="#161b22">
           <title>Burn-After-Read Paste | px0</title>
           <link rel="icon" type="image/svg+xml" href="/favicon.ico">
+          ${raw(THEME_BOOTSTRAP_SCRIPT)}
           <style>
             ${raw(CSS_VARIABLES)}
             ${raw(BASE_CSS)}
@@ -466,7 +480,10 @@ app.get("/:id", async (c) => {
         <body>
           <header>
             <a href="/" class="brand" title="px0 homepage">${raw(brandIcon)}</a>
-            <a href="/" class="btn-action" title="New Paste" aria-label="New Paste">${raw(plusIcon)}</a>
+            <div class="nav-links">
+              <button type="button" id="btnThemeToggle" class="btn-action" title="Toggle Theme" aria-label="Toggle Theme">${raw(sunIcon)}</button>
+              <a href="/" class="btn-action" title="New Paste" aria-label="New Paste">${raw(plusIcon)}</a>
+            </div>
           </header>
           <main class="not-found-wrapper">
             <div class="status-code" style="color: var(--red); font-size: 3rem; margin-bottom: 1rem;">${raw(flameSvg)}</div>
@@ -523,6 +540,7 @@ app.get("/:id", async (c) => {
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Paste ${id} - px0</title>
         <link rel="icon" type="image/svg+xml" href="/favicon.ico">
+        ${raw(THEME_BOOTSTRAP_SCRIPT)}
         <style>
           ${raw(CSS_VARIABLES)}
           ${raw(BASE_CSS)}
@@ -541,6 +559,7 @@ app.get("/:id", async (c) => {
           </div>
 
           <div class="nav-links">
+            <button type="button" id="btnThemeToggle" class="btn-action" title="Toggle Theme" aria-label="Toggle Theme">${raw(sunIcon)}</button>
             <a href="/" class="btn-action" title="New Paste" aria-label="New Paste">${raw(plusIcon)}</a>
             <div id="pasteActions" class="paste-actions" style="display: ${isPasswordProtected || isEncrypted ? "none" : "flex"}; gap: 0.5rem; align-items: center;">
               ${
@@ -583,7 +602,7 @@ app.get("/:id", async (c) => {
               // Nothing left to delete once it has burned.
               isBurnAfterRead
                 ? ""
-                : html`<button type="button" id="deleteBtn" class="btn-delete" style="display: ${isPasswordProtected || isEncrypted ? "none" : "flex"};" title="Delete this paste instantly">
+                : html`<button type="button" id="deleteBtn" class="btn-delete" style="display: none;" title="Delete this paste instantly">
               ${raw(trashIcon)}
               <span id="deleteLabel">Delete</span>
             </button>`

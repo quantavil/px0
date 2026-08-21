@@ -6,6 +6,7 @@ import {
   deriveKeyFromPassword,
   flashCopied,
   formatTimeLeft,
+  initThemeToggle,
   renderMarkdown,
 } from "./shared";
 
@@ -235,24 +236,25 @@ function bindDeleteButton() {
   btn.addEventListener("click", async () => {
     if (btn.dataset.armed === "1") {
       try {
-        const res = await fetch(
-          `/api/paste/${encodeURIComponent(id)}?token=${encodeURIComponent(deleteToken)}`,
-          {
-            method: "DELETE",
-            headers: { "X-Delete-Token": deleteToken },
-          },
-        );
+        const res = await fetch(`/api/paste/${encodeURIComponent(id)}`, {
+          method: "DELETE",
+          headers: { "X-Delete-Token": deleteToken },
+        });
         if (res.ok) {
           try {
             localStorage.removeItem(`px0_del_${id}`);
           } catch {}
+          window.location.href = "/";
+          return;
         }
+        if (label) label.textContent = "Failed";
+        setTimeout(reset, 2000);
+        return;
       } catch {
-        reset();
+        if (label) label.textContent = "Error";
+        setTimeout(reset, 2000);
         return;
       }
-      window.location.href = "/";
-      return;
     }
     btn.dataset.armed = "1";
     btn.classList.add("armed");
@@ -288,6 +290,7 @@ function preserveHashOnBurnReveal() {
 }
 
 async function initPageViewer() {
+  initThemeToggle();
   preserveHashOnBurnReveal();
   initPx0Data();
   startExpiryCountdown();
@@ -367,6 +370,7 @@ async function initPageViewer() {
   }
 
   if (!isEncrypted) {
+    revealPasteActions();
     attachCodeBlockCopyButtons();
     return;
   }
@@ -403,8 +407,11 @@ async function initPageViewer() {
       const val = keyInput?.value.trim() ?? "";
       if (!val) return;
       const cleanKey = val.startsWith("#") ? val.slice(1) : val;
-      window.location.hash = cleanKey;
-      initPageViewer();
+      if (window.location.hash === `#${cleanKey}`) {
+        initPageViewer();
+      } else {
+        window.location.hash = cleanKey;
+      }
     };
 
     if (btnDecrypt) {
@@ -480,8 +487,11 @@ async function initPageViewer() {
       const val = keyInput?.value.trim() ?? "";
       if (!val) return;
       const cleanKey = val.startsWith("#") ? val.slice(1) : val;
-      window.location.hash = cleanKey;
-      initPageViewer();
+      if (window.location.hash === `#${cleanKey}`) {
+        initPageViewer();
+      } else {
+        window.location.hash = cleanKey;
+      }
     };
 
     if (btnDecrypt) btnDecrypt.addEventListener("click", retryManualKey);

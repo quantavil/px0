@@ -1,8 +1,51 @@
 import { marked } from "marked";
 import { highlight } from "sugar-high";
+import { moonIcon, sunIcon } from "../icons";
 import { decodeBase64Url, sanitizeHtml } from "../utils";
 
 export { bytesToBase64, bytesToBase64Url, decodeBase64Url } from "../utils";
+
+export function initThemeToggle() {
+  const btn = document.getElementById(
+    "btnThemeToggle",
+  ) as HTMLButtonElement | null;
+  if (!btn) return;
+
+  function getEffectiveTheme(): "light" | "dark" {
+    const explicit = document.documentElement.getAttribute("data-theme");
+    if (explicit === "light" || explicit === "dark") return explicit;
+    try {
+      const stored = localStorage.getItem("px0_theme");
+      if (stored === "light" || stored === "dark") return stored;
+    } catch {}
+    return "dark";
+  }
+
+  function updateThemeUI(button: HTMLButtonElement, theme: "light" | "dark") {
+    document.documentElement.setAttribute("data-theme", theme);
+    button.innerHTML = theme === "dark" ? sunIcon : moonIcon;
+    button.title =
+      theme === "dark" ? "Switch to Light Theme" : "Switch to Dark Theme";
+    button.setAttribute("aria-label", button.title);
+  }
+
+  const current = getEffectiveTheme();
+  updateThemeUI(btn, current);
+
+  if (!btn.dataset.boundTheme) {
+    btn.dataset.boundTheme = "1";
+    btn.addEventListener("click", () => {
+      const now =
+        document.documentElement.getAttribute("data-theme") === "light"
+          ? "dark"
+          : "light";
+      try {
+        localStorage.setItem("px0_theme", now);
+      } catch {}
+      updateThemeUI(btn, now);
+    });
+  }
+}
 
 export function formatTimeLeft(ms: number): string {
   if (ms <= 0) return "expired";
@@ -37,7 +80,11 @@ export function sanitizeOutputHtml(htmlStr: string): string {
         if (name.startsWith("on")) {
           el.removeAttribute(attr.name);
         } else if (
-          (name === "href" || name === "src") &&
+          (name === "href" ||
+            name === "src" ||
+            name === "xlink:href" ||
+            name === "formaction" ||
+            name === "srcset") &&
           (val.startsWith("javascript:") ||
             val.startsWith("vbscript:") ||
             val.startsWith("data:"))
@@ -51,12 +98,37 @@ export function sanitizeOutputHtml(htmlStr: string): string {
 
   return (
     htmlStr
-      // `[\s/]` not `\s`: HTML lets `/` separate attributes, so `<img/onerror=…>`
-      // slipped past a whitespace-only match.
-      .replace(/[\s/]+on[a-z]+\s*=\s*(?:'[^']*'|"[^"]*"|[^\s>]+)/gi, "")
+      // Strip dangerous tags completely
       .replace(
-        /(href|src)\s*=\s*["']?\s*(?:javascript|vbscript|data):[^"'>\s]*/gi,
-        '$1="#"',
+        /<\s*(script|iframe|object|embed|style|form)\b[\s\S]*?<\s*\/\s*\1\s*>/gi,
+        "",
+      )
+      .replace(/<\s*(script|iframe|object|embed|style|form)\b[^>]*\/?>/gi, "")
+      // Strip event handlers
+      .replace(/[\s/]+on[a-z0-9_-]+\s*=\s*(?:'[^']*'|"[^"]*"|[^\s>]+)/gi, "")
+      // Strip dangerous URIs by decoding entity representations and inspecting scheme
+      .replace(
+        /(href|src|xlink:href|formaction|srcset)\s*=\s*(?:'([^']*)'|"([^"]*)"|([^\s>]+))/gi,
+        (match, attrName, valSingle, valDouble, valBare) => {
+          const rawVal = valSingle ?? valDouble ?? valBare ?? "";
+          const decoded = rawVal
+            .replace(/&#x([0-9a-f]+);?/gi, (_: string, hex: string) =>
+              String.fromCharCode(parseInt(hex, 16)),
+            )
+            .replace(/&#([0-9]+);?/g, (_: string, dec: string) =>
+              String.fromCharCode(parseInt(dec, 10)),
+            )
+            .replace(/\s+/g, "")
+            .toLowerCase();
+          if (
+            decoded.startsWith("javascript:") ||
+            decoded.startsWith("vbscript:") ||
+            decoded.startsWith("data:")
+          ) {
+            return `${attrName}="#"`;
+          }
+          return match;
+        },
       )
   );
 }
@@ -89,36 +161,39 @@ export function renderMarkdown(md: string): string {
 
   const parsed = marked.parse(md, { async: false }) as string;
 
-  // Re-highlight fenced code blocks with sugar-high. marked has already
-  // entity-escaped the source, so undo that before lexing or the highlighter
-  // sees `&quot;` instead of `"` and double-escapes it.
+  // Re-highlight fenced code blocks with sugar-high while preserving language class.
+  // marked has already entity-escaped the source, so undo that before lexing or
+  // the highlighter sees `&quot;` instead of `"` and double-escapes it.
   const highlighted = parsed.replace(
-    /<pre><code(?: class="language-[a-zA-Z0-9_-]+")?>([\s\S]*?)<\/code><\/pre>/g,
-    (_m, rawCode: string) => {
+    /<pre><code(?: class="(language-[a-zA-Z0-9_-]+)")?>([\s\S]*?)<\/code><\/pre>/g,
+    (_m, langClass: string | undefined, rawCode: string) => {
       const unescaped = rawCode
         .replace(/&lt;/g, "<")
         .replace(/&gt;/g, ">")
         .replace(/&quot;/g, '"')
         .replace(/&#(?:39|039);/g, "'")
         .replace(/&amp;/g, "&");
-      return `<pre><code>${highlight(unescaped)}</code></pre>`;
+      const classAttr = langClass ? ` class="${langClass}"` : "";
+      return `<pre><code${classAttr}>${highlight(unescaped)}</code></pre>`;
     },
   );
 
   return sanitizeOutputHtml(highlighted);
 }
 
-export function copyToClipboard(text: string) {
+export async function copyToClipboard(text: string): Promise<boolean> {
   if (navigator.clipboard?.writeText) {
-    navigator.clipboard.writeText(text).catch(() => {
-      fallbackCopyToClipboard(text);
-    });
-    return;
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      return fallbackCopyToClipboard(text);
+    }
   }
-  fallbackCopyToClipboard(text);
+  return fallbackCopyToClipboard(text);
 }
 
-function fallbackCopyToClipboard(text: string) {
+function fallbackCopyToClipboard(text: string): boolean {
   try {
     const ta = document.createElement("textarea");
     ta.value = text;
@@ -126,9 +201,12 @@ function fallbackCopyToClipboard(text: string) {
     ta.style.opacity = "0";
     document.body.appendChild(ta);
     ta.select();
-    document.execCommand("copy");
+    const success = document.execCommand("copy");
     document.body.removeChild(ta);
-  } catch {}
+    return Boolean(success);
+  } catch {
+    return false;
+  }
 }
 
 // Flashes a button into its `copied` state for visual confirmation.

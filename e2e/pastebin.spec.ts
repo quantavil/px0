@@ -8,7 +8,7 @@ test.describe('px0 E2E Browser Test Suite', () => {
     await expect(page).toHaveTitle(/px0 - Minimalist Markdown Pastebin/);
     await expect(page.locator('.brand')).toContainText('px0');
     await expect(page.locator('#toggleLabel')).toContainText('E2EE');
-    await expect(page.locator('#charCount')).toContainText('›_ 0 lines (0 chars)');
+    await expect(page.locator('#charCount')).toContainText('›_ 0 lines (0 B / 5MB)');
 
     const textarea = page.locator('#content');
     await textarea.fill('Line 1\nLine 2\nLine 3');
@@ -380,7 +380,7 @@ func main() {
     // The pseudo-badge is gone — the title and subtitle already say this.
     await expect(page.locator('.badge-ttl')).toHaveCount(0);
     await expect(page.locator('.not-found-title')).toHaveText('Paste Unavailable');
-    await expect(page.locator('header .btn-action')).toBeVisible();
+    await expect(page.locator('header .btn-action').first()).toBeVisible();
   });
 
   test('11. TTL listbox is keyboard operable and marks the default option', async ({ page }) => {
@@ -427,6 +427,77 @@ func main() {
     // Clearing the password used to silently force E2EE back on.
     await page.locator('#btnPassModal').click();
     await expect(page.locator('#toggleLabel')).toContainText('Plaintext');
+  });
+
+  test('14. Draft autosave restores un-submitted text and allows discarding', async ({ page }) => {
+    await page.goto('/');
+
+    const textarea = page.locator('#content');
+    await textarea.fill('My important unsaved draft note');
+    // Wait for debounced draft save
+    await page.waitForTimeout(500);
+
+    // Reload page -> Draft should be restored with badge
+    await page.reload();
+    await expect(textarea).toHaveValue('My important unsaved draft note');
+    await expect(page.locator('.draft-badge')).toContainText('Draft restored');
+
+    // Click discard button -> Draft cleared
+    await page.locator('#discardDraftBtn').click();
+    await expect(textarea).toHaveValue('');
+    await expect(page.locator('.draft-badge')).toHaveCount(0);
+
+    // Reload again -> Should be empty
+    await page.reload();
+    await expect(textarea).toHaveValue('');
+  });
+
+  test('15. Textarea markdown keyboard ergonomics (Ctrl+B bold wrap, Enter list continuation)', async ({ page }) => {
+    await page.goto('/');
+    const textarea = page.locator('#content');
+
+    // 1. Test Ctrl+B wrap
+    await textarea.fill('hello world');
+    await textarea.focus();
+    // Select "world"
+    await textarea.evaluate((el: HTMLTextAreaElement) => {
+      el.setSelectionRange(6, 11);
+    });
+    await page.keyboard.press('ControlOrMeta+b');
+    expect(await textarea.inputValue()).toBe('hello **world**');
+
+    // 2. Test unordered list continuation on Enter
+    await textarea.fill('- First item');
+    await textarea.focus();
+    await page.keyboard.press('Enter');
+    expect(await textarea.inputValue()).toBe('- First item\n- ');
+
+    // 3. Test exiting list on empty Enter
+    await page.keyboard.press('Enter');
+    expect(await textarea.inputValue()).toBe('- First item\n');
+  });
+
+  test('16. Paper & Ink theme toggle switches between light parchment and dark ink and persists', async ({ page }) => {
+    await page.goto('/');
+
+    const themeBtn = page.locator('#btnThemeToggle');
+    await expect(themeBtn).toBeVisible();
+
+    // Toggle theme to light
+    await themeBtn.click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+
+    // Reload page -> should remain light theme
+    await page.reload();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+
+    // Toggle theme back to dark
+    await themeBtn.click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+
+    // Reload page -> should remain dark theme
+    await page.reload();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   });
 
 });

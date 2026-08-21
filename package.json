@@ -6,8 +6,9 @@
   "scripts": {
     "dev": "bun test/e2e-server.ts",
     "start": "bun test/e2e-server.ts",
+    "build": "bun run build:client",
     "build:client": "bun build src/client/landing.ts src/client/viewer.ts --target=browser --outdir=public --minify",
-    "deploy": "wrangler deploy",
+    "deploy": "bun run build:client && wrangler deploy",
     "check": "tsc --noEmit",
     "lint": "biome check .",
     "format": "biome format --write .",

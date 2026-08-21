@@ -553,4 +553,83 @@ describe("Hono Security & Route Handlers", () => {
     expect(rateLimitMap.size).toBeLessThanOrEqual(2000);
     rateLimitMap.clear();
   });
+
+  test("sanitizeOutputHtml strips dangerous tags including script, iframe, form, and object", () => {
+    const dangerousHtml =
+      '<script>alert("pwnd")</script><iframe src="evil.com"></iframe><form action="/steal"><input></form><object data="exploit.swf"></object><p>Safe text</p>';
+    const cleaned = sanitizeOutputHtml(dangerousHtml);
+    expect(cleaned).not.toContain("<script");
+    expect(cleaned).not.toContain("<iframe");
+    expect(cleaned).not.toContain("<form");
+    expect(cleaned).not.toContain("<object");
+    expect(cleaned).toContain("<p>Safe text</p>");
+  });
+
+  test("sanitizeOutputHtml neutralizes entity-encoded javascript URIs", () => {
+    const encodedMalicious = '<a href="&#106;avascript:alert(1)">Click</a>';
+    const cleaned = sanitizeOutputHtml(encodedMalicious);
+    expect(cleaned).not.toContain("&#106;avascript:alert(1)");
+    expect(cleaned).toContain('href="#"');
+  });
+
+  test("renderMarkdown preserves language class on fenced code blocks", () => {
+    const md = '```python\ndef hello():\n    return "world"\n```';
+    const parsed = renderMarkdown(md);
+    expect(parsed).toContain('class="language-python"');
+  });
+
+  test("DELETE /api/paste/:id succeeds using header-only X-Delete-Token without query param", async () => {
+    const createRes = await app.request("/api/paste", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: "Paste to delete with header token" }),
+    });
+    expect(createRes.status).toBe(200);
+    const { id, deleteToken } = (await createRes.json()) as {
+      id: string;
+      deleteToken: string;
+    };
+
+    // DELETE request with only X-Delete-Token header (no query param)
+    const delRes = await app.request(`/api/paste/${id}`, {
+      method: "DELETE",
+      headers: { "X-Delete-Token": deleteToken },
+    });
+    expect(delRes.status).toBe(200);
+    const delJson = (await delRes.json()) as { ok: boolean };
+    expect(delJson.ok).toBe(true);
+
+    // Verify paste is deleted
+    const viewRes = await app.request(`/${id}`);
+    expect(viewRes.status).toBe(404);
+  });
+
+  test("SSR templates include theme bootstrap script and #btnThemeToggle", async () => {
+    const landingRes = await app.request("/");
+    expect(landingRes.status).toBe(200);
+    const landingHtml = await landingRes.text();
+    expect(landingHtml).toContain('localStorage.getItem("px0_theme")');
+    expect(landingHtml).toContain('id="btnThemeToggle"');
+
+    const notFoundRes = await app.request("/nonexistent_page_123");
+    expect(notFoundRes.status).toBe(404);
+    const notFoundHtml = await notFoundRes.text();
+    expect(notFoundHtml).toContain('localStorage.getItem("px0_theme")');
+    expect(notFoundHtml).toContain('id="btnThemeToggle"');
+  });
+
+  test("SSR renders #deleteBtn with display: none for stranger hygiene", async () => {
+    const createRes = await app.request("/api/paste", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: "Public paste without token in SSR" }),
+    });
+    const { id } = (await createRes.json()) as { id: string };
+
+    const viewRes = await app.request(`/${id}`);
+    expect(viewRes.status).toBe(200);
+    const htmlText = await viewRes.text();
+    expect(htmlText).toContain('id="deleteBtn"');
+    expect(htmlText).toContain('style="display: none;"');
+  });
 });

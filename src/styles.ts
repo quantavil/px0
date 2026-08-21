@@ -1,24 +1,24 @@
 // Centralized CSS custom properties and theme tokens
 export const CSS_VARIABLES = `
-  :root {
+  :root, [data-theme="dark"] {
     color-scheme: dark;
 
-    --bg: #100e17;
-    --surface: #191621;
-    --surface-hi: #221e2e;
-    --header-bg: rgba(25, 22, 33, 0.92);
+    --bg: #0f0e13;
+    --bg-radial: #171520;
+    --surface: #18161f;
+    --surface-hi: #221e2c;
+    --header-bg: rgba(24, 22, 31, 0.92);
 
     --border: rgba(255, 255, 255, 0.1);
     --border-hover: rgba(255, 255, 255, 0.22);
 
-    --text: #d4d4d4;
-    --text-muted: #8890a4;
-    --text-dim: #7b83a0;
+    --text: #ede9e1;
+    --text-muted: #928e85;
+    --text-dim: #6e6a62;
     --text-accent: #0fb6d6;
     --text-sub-accent: #f4569d;
 
-    /* Semantic accents. Each colour ships with a translucent fill and a border
-       tint so badges/buttons never mix one hue's text with another's chrome. */
+    /* Semantic accents for Dark Ink */
     --amber: #d29922;
     --amber-fill: rgba(210, 153, 34, 0.12);
     --amber-line: rgba(210, 153, 34, 0.35);
@@ -36,20 +36,79 @@ export const CSS_VARIABLES = `
     --red-fill: rgba(248, 81, 73, 0.12);
     --red-line: rgba(248, 81, 73, 0.35);
 
-    --radius: 8px;
-    --radius-sm: 6px;
-    --radius-lg: 14px;
+    --code-bg: #141219;
+    --modal-bg: #161b22;
+    --modal-input-bg: #0d1117;
+    --modal-shadow: rgba(0, 0, 0, 0.65);
+    --brand-text: #ede9e1;
 
-    --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-    --control-h: 32px;
-
-    /* Dracula-inspired syntax highlighting tokens (Anthracite theme) */
+    /* Dark mode syntax highlighting tokens */
     --sh-keyword: #ff79c6;
     --sh-string: #e6db74;
     --sh-comment: #6272a4;
     --sh-number: #bd93f9;
     --sh-identifier: #50fa7b;
     --sh-sign: #8be9fd;
+
+    --radius: 8px;
+    --radius-sm: 6px;
+    --radius-lg: 14px;
+
+    --serif: "Charter", "Bitstream Charter", "Sitka Text", "Cambria", Georgia, serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    --sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --control-h: 32px;
+  }
+
+  [data-theme="light"] {
+    color-scheme: light;
+
+    --bg: #f8f6f0;
+    --bg-radial: #ede8dc;
+    --surface: #ffffff;
+    --surface-hi: #f2ede2;
+    --header-bg: rgba(248, 246, 240, 0.9);
+
+    --border: rgba(35, 32, 29, 0.12);
+    --border-hover: rgba(35, 32, 29, 0.25);
+
+    --text: #1a1917;
+    --text-muted: #6e6962;
+    --text-dim: #9c968c;
+    --text-accent: #1b588c;
+    --text-sub-accent: #9c27b0;
+
+    /* Semantic accents for Light Parchment */
+    --amber: #b85d19;
+    --amber-fill: rgba(184, 93, 25, 0.08);
+    --amber-line: rgba(184, 93, 25, 0.28);
+    --amber-glow: rgba(184, 93, 25, 0.18);
+
+    --green: #2d7a46;
+    --green-fill: rgba(45, 122, 70, 0.08);
+    --green-line: rgba(45, 122, 70, 0.28);
+
+    --blue: #1b588c;
+    --blue-fill: rgba(27, 88, 140, 0.08);
+    --blue-line: rgba(27, 88, 140, 0.28);
+
+    --red: #a62828;
+    --red-fill: rgba(166, 40, 40, 0.08);
+    --red-line: rgba(166, 40, 40, 0.28);
+
+    --code-bg: #f0ede4;
+    --modal-bg: #ffffff;
+    --modal-input-bg: #f5f2ea;
+    --modal-shadow: rgba(0, 0, 0, 0.18);
+    --brand-text: #1a1917;
+
+    /* Light mode syntax highlighting tokens */
+    --sh-keyword: #a020f0;
+    --sh-string: #8b5a00;
+    --sh-comment: #708090;
+    --sh-number: #0086b3;
+    --sh-identifier: #1f6f36;
+    --sh-sign: #444444;
   }
 `;
 
@@ -60,9 +119,9 @@ export const BASE_CSS = `
   html, body {
     height: 100%;
     background-color: var(--bg);
-    background-image: radial-gradient(circle at 50% 0%, #161b22 0%, #0d1117 80%);
+    background-image: radial-gradient(circle at 50% 0%, var(--bg-radial) 0%, var(--bg) 80%);
     color: var(--text);
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: var(--sans);
     -webkit-font-smoothing: antialiased;
   }
 
@@ -285,14 +344,15 @@ export const MARKDOWN_CSS = `
   }
 
   .markdown-body, .preview-pane {
-    line-height: 1.7;
-    font-size: 1.05rem;
+    font-family: var(--serif);
+    line-height: 1.75;
+    font-size: 1.1rem;
     color: var(--text);
   }
 
   .markdown-body > :first-child, .preview-pane > :first-child { margin-top: 0; }
 
-  /* Gradient headings with Anthracite fade-out underlines */
+  /* Gradient headings with fade-out underlines */
   .markdown-body :is(h1, h2, h3, h4, h5, h6),
   .preview-pane :is(h1, h2, h3, h4, h5, h6) {
     position: relative;
@@ -351,19 +411,19 @@ export const MARKDOWN_CSS = `
   .markdown-body li > ul, .markdown-body li > ol,
   .preview-pane li > ul, .preview-pane li > ol { margin: 0.35rem 0 0.35rem 1.25rem; }
 
-  /* Anthracite Blockquotes & Nested Levels */
+  /* Paper & Ink Blockquotes & Nested Levels */
   .markdown-body blockquote, .preview-pane blockquote {
-    border-left: 3px solid #4aa8fb;
-    background: linear-gradient(to right, rgba(120, 120, 120, 0.15), var(--bg));
+    border-left: 3px solid var(--amber);
+    background: var(--amber-fill);
     border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
     padding: 0.6rem 1rem;
-    color: #d4d4d4;
+    color: var(--text);
     margin: 1rem 0;
   }
 
   .markdown-body blockquote blockquote, .preview-pane blockquote blockquote {
-    border-left-color: rgba(244, 86, 157, 0.6);
-    background: linear-gradient(to right, rgba(244, 86, 157, 0.06), var(--bg));
+    border-left-color: var(--text-sub-accent);
+    background: rgba(244, 86, 157, 0.06);
   }
 
   .markdown-body blockquote blockquote blockquote, .preview-pane blockquote blockquote blockquote {
@@ -491,13 +551,13 @@ export const MARKDOWN_CSS = `
 
   .markdown-body pre, .preview-pane pre {
     position: relative;
-    background: var(--surface);
+    background: var(--code-bg);
     border: 1px solid var(--border);
     padding: 1.25rem 1.5rem;
     border-radius: 10px;
     overflow-x: auto;
     margin: 1.25rem 0;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
   }
 
   .code-copy-btn {
@@ -850,11 +910,11 @@ export const LANDING_CSS = `
     position: relative;
     width: 100%;
     max-width: 520px;
-    background: #161b22;
+    background: var(--modal-bg);
     border: 1px solid var(--border-hover);
     border-radius: var(--radius-lg);
     padding: 1.5rem;
-    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.06);
+    box-shadow: 0 20px 50px var(--modal-shadow), 0 0 0 1px var(--border);
     display: flex;
     flex-direction: column;
     gap: 1.1rem;
@@ -920,7 +980,7 @@ export const LANDING_CSS = `
   .px-modal-title {
     font-size: 1.12rem;
     font-weight: 700;
-    color: #f0f6fc;
+    color: var(--text);
     letter-spacing: -0.02em;
     margin: 0;
   }
@@ -947,7 +1007,7 @@ export const LANDING_CSS = `
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    background: #0d1117;
+    background: var(--modal-input-bg);
     border: 1px solid var(--border-hover);
     border-radius: var(--radius);
     padding: 0.35rem 0.35rem 0.35rem 0.85rem;
@@ -970,7 +1030,7 @@ export const LANDING_CSS = `
     background: transparent;
     border: none;
     outline: none;
-    color: #f0f6fc;
+    color: var(--text);
     font-family: var(--mono);
     font-size: 0.88rem;
     text-overflow: ellipsis;
@@ -1040,13 +1100,14 @@ export const LANDING_CSS = `
   }
 
   .px-modal-done {
-    background: rgba(255, 255, 255, 0.08);
-    color: #f0f6fc;
+    background: var(--surface-hi);
+    color: var(--text);
+    border: 1px solid var(--border);
   }
 
   .px-modal-done:hover {
-    background: rgba(255, 255, 255, 0.14);
-    color: #ffffff;
+    background: var(--border-hover);
+    color: var(--text);
   }
 
   /* Success flash animation when copied */
@@ -1058,6 +1119,34 @@ export const LANDING_CSS = `
     box-shadow: none !important;
   }
 
+  .draft-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.72rem;
+    font-family: var(--mono);
+    color: var(--amber);
+    background: var(--amber-fill);
+    border: 1px solid var(--amber-line);
+    padding: 0.2rem 0.5rem;
+    border-radius: var(--radius-sm);
+    animation: px-fade-in 0.2s ease;
+  }
+
+  .draft-discard {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    text-decoration: underline;
+    font-family: inherit;
+    font-size: inherit;
+    padding: 0;
+    margin-left: 0.2rem;
+    transition: color 0.15s ease;
+  }
+
+  .draft-discard:hover { color: var(--red); }
 
   @media (max-width: 767px) {
     textarea, .preview-pane { padding: 1.25rem 1rem; }
@@ -1077,6 +1166,21 @@ export const LANDING_CSS = `
 
     .inline-pass-bar.visible { max-width: 150px; }
     .inline-pass-input { width: 95px; }
+  }
+
+  @media (max-width: 640px) {
+    .editor-container.split-active textarea {
+      display: none !important;
+    }
+    .editor-container.split-active .preview-pane {
+      display: block !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      height: 100% !important;
+      flex: 1 1 100% !important;
+      border-left: none !important;
+      border-top: none !important;
+    }
   }
 
   @media (max-width: 520px) {
@@ -1203,13 +1307,13 @@ export const VIEWER_CSS = `
 
   .unlock-card {
     background: var(--surface);
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    border: 1px solid var(--border);
     border-radius: 16px;
     max-width: 440px;
     width: 100%;
     padding: 2.25rem 2rem;
     text-align: center;
-    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 20px 50px var(--modal-shadow);
   }
 
   .unlock-icon-container {
@@ -1246,8 +1350,8 @@ export const VIEWER_CSS = `
   .unlock-input {
     flex: 1;
     min-width: 0;
-    background: var(--bg);
-    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: var(--modal-input-bg);
+    border: 1px solid var(--border);
     color: var(--text);
     font-family: var(--mono);
     font-size: 0.9rem;

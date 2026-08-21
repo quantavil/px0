@@ -15,10 +15,12 @@ import {
   deriveKeyFromPassword,
   flashCopied,
   generate8CharPassword,
+  initThemeToggle,
   renderMarkdown,
 } from "./shared";
 
 function initLanding() {
+  initThemeToggle();
   const textarea = document.getElementById(
     "content",
   ) as HTMLTextAreaElement | null;
@@ -213,7 +215,14 @@ function initLanding() {
     toggleLabel.title = m.title;
   }
 
+  function formatBytes(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+  }
+
   const currentPassword = () => inlinePassInput?.value.trim() ?? "";
+  let rememberedPassword = "";
 
   // Remembered across a password on/off cycle: forcing the toggle back to E2EE
   // when the password is cleared silently overrode a deliberate Plaintext pick.
@@ -245,17 +254,20 @@ function initLanding() {
       btnPassModal.setAttribute("aria-pressed", String(!isVisible));
 
       if (isVisible) {
-        // Toggle OFF: Disable password protection, collapse bar, clear password, remove active highlight
+        // Toggle OFF: Disable password protection, collapse bar, remember password, remove active highlight
         btnPassModal.classList.remove("active");
         inlinePassBar.classList.remove("visible");
-        if (inlinePassInput) inlinePassInput.value = "";
+        if (inlinePassInput) {
+          rememberedPassword = inlinePassInput.value;
+          inlinePassInput.value = "";
+        }
         syncPasswordState();
       } else {
         // Toggle ON: Enable password protection, expand bar, add active highlight
         btnPassModal.classList.add("active");
         inlinePassBar.classList.add("visible");
-        if (inlinePassInput && !inlinePassInput.value.trim()) {
-          inlinePassInput.value = generate8CharPassword();
+        if (inlinePassInput) {
+          inlinePassInput.value = rememberedPassword || generate8CharPassword();
           copyToClipboard(inlinePassInput.value);
           flashCopied(copyPassBtn);
         }
@@ -315,16 +327,132 @@ function initLanding() {
     if (!textarea || !charCount) return;
     const val = textarea.value || "";
     const lines = val ? val.split("\n").length : 0;
-    const chars = val.length;
-    charCount.textContent = `›_ ${lines} lines (${chars} chars)`;
+    const byteCount = new TextEncoder().encode(val).byteLength;
+    charCount.textContent = `›_ ${lines} lines (${formatBytes(byteCount)} / 5MB)`;
 
     if (editorContainer?.classList.contains("split-active")) {
       scheduleLivePreview();
     }
   }
 
+  const draftContainer = document.getElementById("draftContainer");
+  let draftTimer: ReturnType<typeof setTimeout> | undefined;
+
+  function scheduleDraftSave() {
+    clearTimeout(draftTimer);
+    draftTimer = setTimeout(() => {
+      if (!textarea) return;
+      try {
+        if (textarea.value.trim()) {
+          localStorage.setItem("px0_draft", textarea.value);
+        } else {
+          localStorage.removeItem("px0_draft");
+        }
+      } catch {}
+    }, 400);
+  }
+
+  function checkAndRestoreDraft() {
+    if (!textarea) return;
+    try {
+      const savedDraft = localStorage.getItem("px0_draft");
+      if (savedDraft && !textarea.value) {
+        textarea.value = savedDraft;
+        updateStats();
+        if (draftContainer) {
+          draftContainer.innerHTML = `
+            <span class="draft-badge">
+              Draft restored
+              <button type="button" id="discardDraftBtn" class="draft-discard" title="Discard saved draft">Discard</button>
+            </span>
+          `;
+          document
+            .getElementById("discardDraftBtn")
+            ?.addEventListener("click", () => {
+              try {
+                localStorage.removeItem("px0_draft");
+              } catch {}
+              if (textarea) textarea.value = "";
+              updateStats();
+              if (draftContainer) draftContainer.innerHTML = "";
+            });
+        }
+      }
+    } catch {}
+  }
+
+  function wrapSelection(before: string, after: string, defaultText = "") {
+    if (!textarea) return;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const text = textarea.value;
+    const selected = text.substring(start, end) || defaultText;
+    const replacement = `${before}${selected}${after}`;
+    textarea.value =
+      text.substring(0, start) + replacement + text.substring(end);
+    textarea.selectionStart = start + before.length;
+    textarea.selectionEnd = start + before.length + selected.length;
+    updateStats();
+    scheduleDraftSave();
+  }
+
+  function handleListContinuation(e: KeyboardEvent) {
+    if (!textarea || e.key !== "Enter" || e.shiftKey || e.ctrlKey || e.metaKey)
+      return;
+    const start = textarea.selectionStart;
+    const text = textarea.value;
+    const lineStart = text.lastIndexOf("\n", start - 1) + 1;
+    const currentLine = text.substring(lineStart, start);
+
+    const unorderedMatch = currentLine.match(/^(\s*)([-*+])\s+(.*)$/);
+    if (unorderedMatch) {
+      e.preventDefault();
+      const [, indent, bullet, content] = unorderedMatch;
+      if (!content.trim()) {
+        textarea.value = text.substring(0, lineStart) + text.substring(start);
+        textarea.selectionStart = textarea.selectionEnd = lineStart;
+      } else {
+        const continuation = `\n${indent}${bullet} `;
+        textarea.value =
+          text.substring(0, start) + continuation + text.substring(start);
+        textarea.selectionStart = textarea.selectionEnd =
+          start + continuation.length;
+      }
+      updateStats();
+      scheduleDraftSave();
+      return;
+    }
+
+    const orderedMatch = currentLine.match(/^(\s*)(\d+)\.\s+(.*)$/);
+    if (orderedMatch) {
+      e.preventDefault();
+      const [, indent, numStr, content] = orderedMatch;
+      if (!content.trim()) {
+        textarea.value = text.substring(0, lineStart) + text.substring(start);
+        textarea.selectionStart = textarea.selectionEnd = lineStart;
+      } else {
+        const nextNum = parseInt(numStr, 10) + 1;
+        const continuation = `\n${indent}${nextNum}. `;
+        textarea.value =
+          text.substring(0, start) + continuation + text.substring(start);
+        textarea.selectionStart = textarea.selectionEnd =
+          start + continuation.length;
+      }
+      updateStats();
+      scheduleDraftSave();
+      return;
+    }
+  }
+
   if (textarea) {
-    textarea.addEventListener("input", updateStats);
+    textarea.addEventListener("input", () => {
+      updateStats();
+      scheduleDraftSave();
+      if (draftContainer && !textarea.value.trim()) {
+        draftContainer.innerHTML = "";
+      }
+    });
+
     textarea.addEventListener("keydown", (e) => {
       if (e.key === "Tab") {
         e.preventDefault();
@@ -336,27 +464,55 @@ function initLanding() {
           textarea.value.substring(end);
         textarea.selectionStart = textarea.selectionEnd = start + 2;
         updateStats();
+        scheduleDraftSave();
+        return;
       }
+
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey) {
+        const k = e.key.toLowerCase();
+        if (k === "b") {
+          e.preventDefault();
+          wrapSelection("**", "**", "bold text");
+          return;
+        }
+        if (k === "i") {
+          e.preventDefault();
+          wrapSelection("*", "*", "italic text");
+          return;
+        }
+        if (k === "k") {
+          e.preventDefault();
+          wrapSelection("[", "](url)", "link text");
+          return;
+        }
+      }
+
+      handleListContinuation(e);
     });
+
+    checkAndRestoreDraft();
   }
 
   const form = document.getElementById("pasteForm") as HTMLFormElement | null;
   const saveError = document.getElementById(
     "saveError",
   ) as HTMLSpanElement | null;
+  let isSubmitting = false;
 
   if (form) {
     // The Save button advertises Ctrl+S; actually wire it up.
     document.addEventListener("keydown", (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
-        form.requestSubmit();
+        if (!isSubmitting) {
+          form.requestSubmit();
+        }
       }
     });
 
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
-      if (!textarea || !e2eeToggle) return;
+      if (isSubmitting || !textarea || !e2eeToggle) return;
 
       const saveBtn = document.getElementById(
         "saveBtn",
@@ -367,11 +523,13 @@ function initLanding() {
       // this machine, during which Save only dimmed. The unlock button already
       // says "Unlocking…"; the create side needs the same honesty.
       const setSaveBusy = (label: string | null) => {
+        isSubmitting = label !== null;
         if (saveBtn) saveBtn.disabled = label !== null;
         if (saveBtnLabel) saveBtnLabel.textContent = label ?? "Save";
       };
 
       const fail = (msg: string) => {
+        isSubmitting = false;
         if (saveError) saveError.textContent = msg;
         setSaveBusy(null);
       };
@@ -383,10 +541,19 @@ function initLanding() {
         return;
       }
 
+      const passwordVal = currentPassword();
+      if (passwordVal.length > 0 && passwordVal.length < 8) {
+        fail("Password must be at least 8 characters.");
+        if (inlinePassInput) {
+          inlinePassInput.focus();
+          inlinePassInput.select();
+        }
+        return;
+      }
+
       const text = textarea.value;
       const isE2ee = e2eeToggle.checked;
       const selectedTtl = ttlInput ? ttlInput.value : "30d";
-      const passwordVal = currentPassword();
 
       setSaveBusy(passwordVal || isE2ee ? "Encrypting…" : "Saving…");
 
@@ -471,6 +638,9 @@ function initLanding() {
             localStorage.setItem(`px0_del_${data.id}`, data.deleteToken);
           } catch {}
         }
+        try {
+          localStorage.removeItem("px0_draft");
+        } catch {}
         setSaveBusy(null);
 
         const pasteUrl = `/${data.id}${
@@ -550,7 +720,7 @@ function showSuccessModal(
       <div class="px-modal-burn-warning">
         <div class="px-burn-warn-icon">${flameSvg}</div>
         <div class="px-burn-warn-text">
-          <strong>One-time view only:</strong> Opening this link will immediately and permanently delete the paste. Do not open it if you intend to send it to someone else!
+          <strong>One-time view only:</strong> Opening this link will immediately delete the paste. Do not open it if you intend to send it to someone else!
         </div>
       </div>
       `
@@ -600,16 +770,18 @@ function showSuccessModal(
     setTimeout(() => overlay.remove(), 160);
   };
 
-  const performCopy = () => {
+  const performCopy = async () => {
     urlInput?.focus();
     urlInput?.select();
-    copyToClipboard(fullUrl);
-    flashCopied(copyBtn);
-    if (copyText) {
-      copyText.textContent = "Copied!";
-      setTimeout(() => {
-        if (copyText) copyText.textContent = "Copy";
-      }, 2000);
+    const copied = await copyToClipboard(fullUrl);
+    if (copied) {
+      flashCopied(copyBtn);
+      if (copyText) {
+        copyText.textContent = "Copied!";
+        setTimeout(() => {
+          if (copyText) copyText.textContent = "Copy";
+        }, 2000);
+      }
     }
   };
 
@@ -643,8 +815,36 @@ function showSuccessModal(
   };
   document.addEventListener("keydown", handleKeydown);
 
+  // Focus trap for accessibility
+  const focusableElements = () =>
+    Array.from(
+      overlay.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      ),
+    ).filter((el) => !el.hasAttribute("disabled") && el.offsetParent !== null);
+
+  overlay.addEventListener("keydown", (e: KeyboardEvent) => {
+    if (e.key !== "Tab") return;
+    const focusables = focusableElements();
+    if (focusables.length === 0) return;
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+
+    if (e.shiftKey) {
+      if (document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      }
+    } else {
+      if (document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+  });
+
   document.getElementById("pxModalNewBtn")?.addEventListener("click", () => {
-    window.location.reload();
+    window.location.href = "/";
   });
 }
 
