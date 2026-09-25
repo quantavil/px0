@@ -8,19 +8,15 @@ import {
   lockIcon,
   plusIcon,
 } from "../icons";
-import { ENC_PREFIX, MAX_PASTE_BYTES, PASS_PREFIX } from "../utils";
+import { ENC_PREFIX, MAX_PASTE_BYTES } from "../utils";
 import {
   bytesToBase64Url,
   copyToClipboard,
-  deriveKeyFromPassword,
   flashCopied,
-  generate8CharPassword,
-  initThemeToggle,
   renderMarkdown,
 } from "./shared";
 
 function initLanding() {
-  initThemeToggle();
   const textarea = document.getElementById(
     "content",
   ) as HTMLTextAreaElement | null;
@@ -39,9 +35,6 @@ function initLanding() {
   const e2eeToggle = document.getElementById(
     "e2eeToggle",
   ) as HTMLInputElement | null;
-  const toggleLabel = document.getElementById(
-    "toggleLabel",
-  ) as HTMLSpanElement | null;
   const ttlDropdown = document.getElementById(
     "ttlDropdown",
   ) as HTMLDivElement | null;
@@ -54,16 +47,6 @@ function initLanding() {
   ) as HTMLSpanElement | null;
   const ttlInput = document.getElementById(
     "ttlInput",
-  ) as HTMLInputElement | null;
-
-  const btnPassModal = document.getElementById(
-    "btnPassModal",
-  ) as HTMLButtonElement | null;
-  const inlinePassBar = document.getElementById(
-    "inlinePassBar",
-  ) as HTMLDivElement | null;
-  const inlinePassInput = document.getElementById(
-    "inlinePassInput",
   ) as HTMLInputElement | null;
 
   function closeTtlMenu() {
@@ -186,34 +169,9 @@ function initLanding() {
     });
   }
 
-  // The footer badge must state what actually happens to the payload. A
-  // password-protected paste is encrypted (PBKDF2 + AES-GCM), so labelling it
-  // "Plaintext" — as this did — misrepresents the security of the paste.
-  const MODES = {
-    e2ee: {
-      html: `${lockIcon} E2EE`,
-      cls: "badge badge-encrypted",
-      title: "Zero-knowledge encrypted: the key never leaves your browser",
-    },
-    password: {
-      html: `${lockIcon} Password`,
-      cls: "badge badge-encrypted",
-      title: "Encrypted with your password (PBKDF2 + AES-GCM)",
-    },
-    plaintext: {
-      html: `${globeSvg} Plaintext`,
-      cls: "badge badge-public",
-      title: "Stored unencrypted — anyone with the link can read it",
-    },
-  } as const;
-
-  function setToggleLabel(mode: keyof typeof MODES) {
-    if (!toggleLabel) return;
-    const m = MODES[mode];
-    toggleLabel.innerHTML = m.html;
-    toggleLabel.className = m.cls;
-    toggleLabel.title = m.title;
-  }
+  // Plaintext is the default; the user opts into E2EE per paste. The two
+  // radios share one name, so the browser keeps them mutually exclusive and
+  // the :checked badge styles show the choice — no JS label sync needed.
 
   function formatBytes(bytes: number): string {
     if (bytes < 1024) return `${bytes} B`;
@@ -221,75 +179,9 @@ function initLanding() {
     return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
   }
 
-  const currentPassword = () => inlinePassInput?.value.trim() ?? "";
-  let rememberedPassword = "";
-
-  // Remembered across a password on/off cycle: forcing the toggle back to E2EE
-  // when the password is cleared silently overrode a deliberate Plaintext pick.
-  let wantsE2ee = true;
-
-  function syncPasswordState() {
-    if (!e2eeToggle) return;
-
-    if (currentPassword().length > 0) {
-      // Password mode supersedes the E2EE/plaintext choice.
-      e2eeToggle.checked = false;
-      e2eeToggle.disabled = true;
-      setToggleLabel("password");
-    } else {
-      e2eeToggle.disabled = false;
-      e2eeToggle.checked = wantsE2ee;
-      setToggleLabel(wantsE2ee ? "e2ee" : "plaintext");
-    }
-  }
-
-  if (btnPassModal && inlinePassBar) {
-    const copyPassBtn = document.getElementById(
-      "copyPassBtn",
-    ) as HTMLButtonElement | null;
-
-    btnPassModal.addEventListener("click", () => {
-      const isVisible = inlinePassBar.classList.contains("visible");
-
-      btnPassModal.setAttribute("aria-pressed", String(!isVisible));
-
-      if (isVisible) {
-        // Toggle OFF: Disable password protection, collapse bar, remember password, remove active highlight
-        btnPassModal.classList.remove("active");
-        inlinePassBar.classList.remove("visible");
-        if (inlinePassInput) {
-          rememberedPassword = inlinePassInput.value;
-          inlinePassInput.value = "";
-        }
-        syncPasswordState();
-      } else {
-        // Toggle ON: Enable password protection, expand bar, add active highlight
-        btnPassModal.classList.add("active");
-        inlinePassBar.classList.add("visible");
-        if (inlinePassInput) {
-          inlinePassInput.value = rememberedPassword || generate8CharPassword();
-          copyToClipboard(inlinePassInput.value);
-          flashCopied(copyPassBtn);
-        }
-        syncPasswordState();
-        if (inlinePassInput) {
-          inlinePassInput.focus();
-          inlinePassInput.select();
-        }
-      }
-    });
-
-    // Manually copy the password via the copy button
-    copyPassBtn?.addEventListener("click", () => {
-      if (inlinePassInput?.value) {
-        copyToClipboard(inlinePassInput.value);
-        flashCopied(copyPassBtn);
-      }
-    });
-  }
-
-  if (inlinePassInput) {
-    inlinePassInput.addEventListener("input", syncPasswordState);
+  // Plaintext is the default; the user opts into E2EE per paste.
+  function isE2eeMode() {
+    return e2eeToggle?.checked ?? false;
   }
 
   function renderLivePreview() {
@@ -313,13 +205,6 @@ function initLanding() {
       if (isSplit) {
         renderLivePreview();
       }
-    });
-  }
-
-  if (e2eeToggle) {
-    e2eeToggle.addEventListener("change", () => {
-      wantsE2ee = e2eeToggle.checked;
-      setToggleLabel(wantsE2ee ? "e2ee" : "plaintext");
     });
   }
 
@@ -530,9 +415,9 @@ function initLanding() {
       ) as HTMLButtonElement | null;
       const saveBtnLabel = saveBtn?.querySelector("span");
 
-      // Deriving a password key is 600k PBKDF2 rounds — about two seconds on
-      // this machine, during which Save only dimmed. The unlock button already
-      // says "Unlocking…"; the create side needs the same honesty.
+      // Generating the E2EE key + encrypting takes a noticeable moment, during
+      // which Save only dimmed. The unlock button already says "Unlocking…";
+      // the create side needs the same honesty.
       const setSaveBusy = (label: string | null) => {
         isSubmitting = label !== null;
         if (saveBtn) saveBtn.disabled = label !== null;
@@ -552,21 +437,11 @@ function initLanding() {
         return;
       }
 
-      const passwordVal = currentPassword();
-      if (passwordVal.length > 0 && passwordVal.length < 8) {
-        fail("Password must be at least 8 characters.");
-        if (inlinePassInput) {
-          inlinePassInput.focus();
-          inlinePassInput.select();
-        }
-        return;
-      }
-
       const text = textarea.value;
-      const isE2ee = e2eeToggle.checked;
-      const selectedTtl = ttlInput ? ttlInput.value : "30d";
+      const isE2ee = isE2eeMode();
+      const selectedTtl = ttlInput ? ttlInput.value : "1d";
 
-      setSaveBusy(passwordVal || isE2ee ? "Encrypting…" : "Saving…");
+      setSaveBusy(isE2ee ? "Encrypting…" : "Saving…");
 
       let payload = text;
       let secretKeyBase64 = "";
@@ -574,19 +449,7 @@ function initLanding() {
       // crypto.subtle throws off HTTP / when WebCrypto is unavailable — without
       // this the handler escapes past `fail()` and Save stays stuck disabled.
       try {
-        if (passwordVal.length > 0) {
-          const salt = crypto.getRandomValues(new Uint8Array(16));
-          const iv = crypto.getRandomValues(new Uint8Array(12));
-          const cryptoKey = await deriveKeyFromPassword(passwordVal, salt);
-          const encodedText = new TextEncoder().encode(text);
-          const ciphertext = await crypto.subtle.encrypt(
-            { name: "AES-GCM", iv },
-            cryptoKey,
-            encodedText,
-          );
-
-          payload = `${PASS_PREFIX}${bytesToBase64Url(salt)}:${bytesToBase64Url(iv)}:${bytesToBase64Url(new Uint8Array(ciphertext))}`;
-        } else if (isE2ee) {
+        if (isE2ee) {
           const cryptoKey = await crypto.subtle.generateKey(
             { name: "AES-GCM", length: 256 },
             true,
@@ -622,7 +485,7 @@ function initLanding() {
       // several megabytes just to be told 413.
       if (new TextEncoder().encode(payload).byteLength > MAX_PASTE_BYTES) {
         fail(
-          isE2ee || passwordVal
+          isE2ee
             ? "Too large — the 5MB limit applies after encryption, which adds about 35%."
             : "Too large — pastes are capped at 5MB.",
         );
@@ -661,21 +524,14 @@ function initLanding() {
         try {
           localStorage.removeItem("px0_draft");
         } catch {}
-        // Don't retain the password in the DOM after a successful save.
-        rememberedPassword = "";
-        if (inlinePassInput) inlinePassInput.value = "";
-        syncPasswordState();
         setSaveBusy(null);
 
         const pasteUrl = `/${data.id}${
-          secretKeyBase64 && passwordVal.length === 0
-            ? `#${secretKeyBase64}`
-            : ""
+          secretKeyBase64 ? `#${secretKeyBase64}` : ""
         }`;
 
-        const modeType =
-          passwordVal.length > 0 ? "password" : isE2ee ? "e2ee" : "plaintext";
-        const ttlLabel = ttlValue?.textContent?.trim() || "30 Days";
+        const modeType = isE2ee ? "e2ee" : "plaintext";
+        const ttlLabel = ttlValue?.textContent?.trim() || "1 Day";
 
         showSuccessModal(pasteUrl, selectedTtl === "burn", modeType, ttlLabel);
       }
@@ -695,7 +551,7 @@ function escapeHtmlAttr(s: string): string {
 function showSuccessModal(
   url: string,
   isBurn: boolean,
-  mode: "e2ee" | "password" | "plaintext",
+  mode: "e2ee" | "plaintext",
   ttlLabel: string,
 ) {
   const fullUrl = window.location.origin + url;
@@ -709,11 +565,9 @@ function showSuccessModal(
   overlay.className = "px-modal-overlay";
 
   const securityBadgeHtml =
-    mode === "password"
-      ? `${lockIcon} Password Protected`
-      : mode === "e2ee"
-        ? `${lockIcon} Zero-Knowledge E2EE`
-        : `${globeSvg} Plaintext (Public)`;
+    mode === "e2ee"
+      ? `${lockIcon} Zero-Knowledge E2EE`
+      : `${globeSvg} Plaintext`;
 
   const expiryBadgeHtml = isBurn
     ? `${flameSvg} Burn After Read (1 View)`

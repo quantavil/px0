@@ -1,8 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
-  deriveKeyFromPassword,
   formatTimeLeft,
-  generate8CharPassword,
   renderMarkdown,
   sanitizeOutputHtml,
 } from "../src/client/shared";
@@ -69,17 +67,6 @@ describe("Pastebin Core Utilities & Security", () => {
     expect(getTtlSeconds("30d")).toBe(2592000);
     expect(getTtlSeconds("invalid")).toBe(2592000); // defaults to 30d
   });
-
-  test("deriveKeyFromPassword successfully derives key even with sliced Uint8Array salt", async () => {
-    const parentBuf = new Uint8Array([
-      0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
-    ]);
-    const slicedSalt = parentBuf.subarray(4, 20); // 16 bytes with byteOffset = 4
-    expect(slicedSalt.byteOffset).toBe(4);
-    const key = await deriveKeyFromPassword("test-password-123", slicedSalt);
-    expect(key).toBeDefined();
-    expect(key.algorithm.name).toBe("AES-GCM");
-  });
 });
 
 describe("Client Shared Utilities & Post-Sanitizer", () => {
@@ -134,15 +121,6 @@ describe("Client Shared Utilities & Post-Sanitizer", () => {
     );
     expect(parsed).not.toContain("javascript:alert(1)");
     expect(parsed).not.toContain("onerror=");
-  });
-
-  test("generate8CharPassword produces an 8-character string with upper, lower, number, and symbol", () => {
-    const pass = generate8CharPassword();
-    expect(pass).toHaveLength(8);
-    expect(pass).toMatch(/[A-Z]/);
-    expect(pass).toMatch(/[a-z]/);
-    expect(pass).toMatch(/[0-9]/);
-    expect(pass).toMatch(/[!@#$%^&*]/);
   });
 
   test("formatTimeLeft renders remaining paste lifetime in days/hours/minutes", () => {
@@ -404,7 +382,7 @@ describe("Hono Security & Route Handlers", () => {
     expect(checkView.status).toBe(404);
   });
 
-  test("POST /api/paste handles Password Protected PASS: payload format correctly", async () => {
+  test("legacy password pastes retire with 410 instead of rendering ciphertext", async () => {
     const passwordPayload = "__PX0_PASS__:salt123:iv123:ciphertext123";
     const res = await app.request("/api/paste", {
       method: "POST",
@@ -416,11 +394,7 @@ describe("Hono Security & Route Handlers", () => {
     const data = (await res.json()) as { id: string };
 
     const viewRes = await app.request(`/${data.id}`);
-    expect(viewRes.status).toBe(200);
-    const htmlText = await viewRes.text();
-    expect(htmlText).toContain('data-password="true"');
-    // /raw would hand back the ciphertext, so the button must not be rendered.
-    expect(htmlText).not.toContain('id="rawBtn"');
+    expect(viewRes.status).toBe(410);
   });
 
   test("POST /api/paste handles E2EE encrypted payload format correctly", async () => {
@@ -604,18 +578,32 @@ describe("Hono Security & Route Handlers", () => {
     expect(viewRes.status).toBe(404);
   });
 
-  test("SSR templates include theme bootstrap script and #btnThemeToggle", async () => {
+  test("landing defaults to plaintext mode with bottom settings bar", async () => {
     const landingRes = await app.request("/");
     expect(landingRes.status).toBe(200);
     const landingHtml = await landingRes.text();
-    expect(landingHtml).toContain('localStorage.getItem("px0_theme")');
-    expect(landingHtml).toContain('id="btnThemeToggle"');
+    // Plaintext radio checked, E2EE off; all optionals live in the footer.
+    expect(landingHtml).toContain('id="modePlaintext" checked');
+    expect(landingHtml).toContain('id="e2eeToggle"');
+    expect(landingHtml).toContain('id="ttlDropdown"');
+    expect(landingHtml).toContain('id="btnSplit"');
+    expect(landingHtml).not.toContain('id="btnPassModal"');
+    expect(landingHtml).not.toContain('id="inlinePassInput"');
+  });
+
+  test("SSR templates pin obsidian theme statically with no bootstrap script", async () => {
+    const landingRes = await app.request("/");
+    expect(landingRes.status).toBe(200);
+    const landingHtml = await landingRes.text();
+    expect(landingHtml).toContain('data-theme="obsidian"');
+    expect(landingHtml).not.toContain("px0_theme");
+    expect(landingHtml).not.toContain('id="btnThemeToggle"');
 
     const notFoundRes = await app.request("/nonexistent_page_123");
     expect(notFoundRes.status).toBe(404);
     const notFoundHtml = await notFoundRes.text();
-    expect(notFoundHtml).toContain('localStorage.getItem("px0_theme")');
-    expect(notFoundHtml).toContain('id="btnThemeToggle"');
+    expect(notFoundHtml).toContain('data-theme="obsidian"');
+    expect(notFoundHtml).not.toContain('id="btnThemeToggle"');
   });
 
   test("SSR renders #deleteBtn with display: none for stranger hygiene", async () => {

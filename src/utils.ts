@@ -2,7 +2,6 @@
 // start with one, and defined once so `.substring(13)` magic numbers and
 // copies of the literal can't drift apart across the worker and the client.
 export const BURN_PREFIX = "__PX0_BURN__:";
-export const PASS_PREFIX = "__PX0_PASS__:";
 export const ENC_PREFIX = "__PX0_ENC__:";
 
 export const THIRTY_DAYS_IN_SECONDS = 30 * 24 * 60 * 60; // 2,592,000 seconds

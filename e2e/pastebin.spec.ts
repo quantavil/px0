@@ -7,6 +7,8 @@ test.describe('px0 E2E Browser Test Suite', () => {
 
     await expect(page).toHaveTitle(/px0 - Minimalist Markdown Pastebin/);
     await expect(page.locator('.brand')).toContainText('px0');
+    // Plaintext is the default mode; E2EE is opt-in via the footer seg.
+    await expect(page.locator('#modePlaintext')).toBeChecked();
     await expect(page.locator('#toggleLabel')).toContainText('E2EE');
     await expect(page.locator('#charCount')).toContainText('›_ 0 lines (0 B / 5MB)');
 
@@ -25,9 +27,8 @@ test.describe('px0 E2E Browser Test Suite', () => {
   test('2. Plaintext Paste submission, sugar-high lexical code highlighting and client/server rendering', async ({ page }) => {
     await page.goto('/');
 
-    // Toggle off E2EE -> Plaintext mode by clicking label
-    await page.locator('.toggle-e2ee').click();
-    await expect(page.locator('#toggleLabel')).toContainText('Plaintext');
+    // Plaintext is the default — no toggle needed.
+    await expect(page.locator('#modePlaintext')).toBeChecked();
 
     const markdownInput = '# E2E Test Title\n\nThis is **bold** text, `inline code`, and:\n\n```js\nconst greeting = "hello";\n```';
     await page.locator('#content').fill(markdownInput);
@@ -62,8 +63,9 @@ test.describe('px0 E2E Browser Test Suite', () => {
   test('3. Zero-Knowledge E2EE Encrypted Paste creation, browser decryption & key missing error', async ({ page, context }) => {
     await page.goto('/');
 
-    // Ensure E2EE is checked
-    await expect(page.locator('#toggleLabel')).toContainText('E2EE');
+    // Opt into E2EE via the footer segmented control
+    await page.locator('label:has(#e2eeToggle)').click();
+    await expect(page.locator('#e2eeToggle')).toBeChecked();
 
     const secretText = '# Top Secret E2EE Note\n\nPassword: `super-secret-123`';
     await page.locator('#content').fill(secretText);
@@ -125,8 +127,7 @@ test.describe('px0 E2E Browser Test Suite', () => {
   test('6. Multi-language syntax highlighting (JS, Python, Rust, HTML, CSS, Go)', async ({ page }) => {
     await page.goto('/');
 
-    // Toggle off E2EE -> Plaintext mode
-    await page.locator('.toggle-e2ee').click();
+    // Plaintext is the default mode — nothing to toggle.
 
     const multiLangInput = `
 # Multi-Language Syntax Highlight Test
@@ -208,10 +209,9 @@ func main() {
   test('7. Burn-After-Read paste creation and self-destruction in browser', async ({ page }) => {
     await page.goto('/');
 
-    // Select "Burn After Read" from custom dropdown
+    // Select "Burn After Read" from custom dropdown (plaintext is default)
     await page.locator('#ttlTrigger').click();
     await page.locator('.ttl-option[data-ttl="burn"]').click();
-    await page.locator('.toggle-e2ee').click(); // Plaintext mode
 
     const sensitiveNote = '# Top Secret Burn Note\n\nSelf destructing after 1 view!';
     await page.locator('#content').fill(sensitiveNote);
@@ -246,55 +246,36 @@ func main() {
     await expect(page.locator('h1')).toContainText('Paste Unavailable');
   });
 
-  test('8. Password Protected paste creation via Inline Lock Bar, 8-digit auto password & unlocking', async ({ page }) => {
+  test('8. Mode seg switches between Plaintext and E2EE, E2EE save carries a key', async ({ page }) => {
     await page.goto('/');
 
-    const secretVaultText = '# Secret Vault\n\nThis note is protected by PBKDF2 + AES-GCM!';
-    await page.locator('#content').fill(secretVaultText);
+    // Default is plaintext
+    await expect(page.locator('#modePlaintext')).toBeChecked();
 
-    // Toggle Inline Password Bar via Lock Icon Button
-    await page.locator('#btnPassModal').click();
-    await expect(page.locator('#inlinePassBar')).toHaveClass(/visible/);
+    // Switch to E2EE
+    await page.locator('label:has(#e2eeToggle)').click();
+    await expect(page.locator('#e2eeToggle')).toBeChecked();
 
-    // Verify auto-generated 8-character password
-    const autoPass = await page.locator('#inlinePassInput').inputValue();
-    expect(autoPass).toHaveLength(8);
-
-    // Edit password to custom value
-    await page.locator('#inlinePassInput').fill('my-vault-pass-123');
-
+    await page.locator('#content').fill('# Sealed Note\n\nEncrypted in the browser.');
     await page.locator('button[type="submit"]').click();
     await expect(page.locator('#pxModalOverlay')).toBeVisible();
-    await expect(page.locator('#inlinePassInput')).toHaveValue('my-vault-pass-123');
-    const passUrl = await page.locator('#pxPasteUrl').inputValue();
-    await page.goto(passUrl);
+    const e2eeUrl = await page.locator('#pxPasteUrl').inputValue();
+    expect(e2eeUrl).toContain('#');
+    await expect(page.locator('.px-modal-badges .badge-encrypted')).toContainText('E2EE');
 
-    await expect(page.locator('.badge-public')).toHaveCount(0);
-    // Password badge is icon-only (no long "Password Protected" text)
-    await expect(page.locator('.footer-bar .badge-encrypted')).toBeVisible();
-    await expect(page.locator('.footer-bar .badge-encrypted')).not.toContainText('Password Protected');
-    await expect(page.locator('#output')).toContainText('Password Protected Paste');
-
-    // Verify paste actions (Copy Link, Copy, Raw) are hidden while locked
-    await expect(page.locator('#pasteActions')).toBeHidden();
-
-    // Test incorrect password error
-    await page.locator('#unlockPass').fill('wrongpassword');
-    await page.locator('#btnUnlockAction').click();
-    await expect(page.locator('#passErr')).toContainText('Incorrect password');
-
-    // Test correct password unlock
-    await page.locator('#unlockPass').fill('my-vault-pass-123');
-    await page.locator('#btnUnlockAction').click();
-
-    await expect(page.locator('#output h1')).toHaveText('Secret Vault');
-    await expect(page.locator('#output p')).toContainText('This note is protected by PBKDF2 + AES-GCM!');
-
-    // Verify paste actions (Copy Link, Copy, Raw) reveal after successful unlock
-    await expect(page.locator('#pasteActions')).toBeVisible();
+    // Switch back to plaintext — next save carries no key
+    await page.locator('#pxModalDoneBtn').click();
+    await page.locator('label:has(#modePlaintext)').click();
+    await expect(page.locator('#modePlaintext')).toBeChecked();
+    await page.locator('#content').fill('# Open Note\n\nStored as-is.');
+    await page.locator('button[type="submit"]').click();
+    await expect(page.locator('#pxModalOverlay')).toBeVisible();
+    const plainUrl = await page.locator('#pxPasteUrl').inputValue();
+    expect(plainUrl).not.toContain('#');
+    await expect(page.locator('.px-modal-badges .badge-public')).toContainText('Plaintext');
   });
 
-  test('9. Top-right SVG split view icon toggles live side-by-side preview', async ({ page }) => {
+  test('9. Footer split-view button toggles live side-by-side preview', async ({ page }) => {
     await page.goto('/');
 
     const markdownInput = '# Live Split Preview Title\n\nThis is **bold** text live preview.';
@@ -327,10 +308,10 @@ func main() {
     await expect(page.locator('#previewPane')).toBeHidden();
   });
 
-  test('10. Comprehensive Visual & Aesthetic Consistency Audit across landing, view, password modal, and 404', async ({ page }) => {
-    // A. Landing Page Visual Tokens
+  test('10. Comprehensive Visual & Aesthetic Consistency Audit across landing, view, unlock card, and 404', async ({ page }) => {
+    // A. Landing Page Visual Tokens — floating glass pill header
     await page.goto('/');
-    await expect(page.locator('header')).toHaveCSS('height', '52px');
+    await expect(page.locator('header')).toHaveCSS('border-radius', '999px');
     await expect(page.locator('.brand tspan').first()).toHaveCSS('font-family', /monospace/);
 
     // B. View Page Visual Tokens
@@ -339,11 +320,10 @@ func main() {
     });
     const { id } = (await pasteRes.json()) as { id: string };
     await page.goto(`/${id}`);
-    await expect(page.locator('header')).toHaveCSS('height', '52px');
     await expect(page.locator('.badge-public')).toContainText('Plaintext');
     // A badge's text, fill and border must all come from one colour token.
-    await expect(page.locator('.badge-public')).toHaveCSS('color', 'rgb(15, 182, 214)');
-    await expect(page.locator('.badge-public')).toHaveCSS('border-color', 'rgba(15, 182, 214, 0.35)');
+    await expect(page.locator('.badge-public')).toHaveCSS('color', 'rgb(88, 166, 255)');
+    await expect(page.locator('.badge-public')).toHaveCSS('border-color', 'rgba(88, 166, 255, 0.35)');
     await expect(page.locator('.markdown-body h1')).toHaveText('Visual Consistency Paste');
 
     // Tables must actually render as tables — GFM tables had no styling at all,
@@ -359,13 +339,13 @@ func main() {
       'solid',
     );
 
-    // C. Password Protection View Modal Visual Tokens
-    const passRes = await page.request.post('/api/paste', {
-      data: { content: '__PX0_PASS__:c2FsdDEyMzQ1Njc4OTAxMg==:aXZiYXNlNjR1cmwxMg==:Y2lwaGVydGV4dGJhc2U2NHVybA==' },
+    // C. E2EE Unlock Card Visual Tokens
+    const encRes = await page.request.post('/api/paste', {
+      data: { content: '__PX0_ENC__:SGVsbG8gV29ybGQ=' },
     });
-    const { id: passId } = (await passRes.json()) as { id: string };
-    await page.goto(`/${passId}`);
-    await expect(page.locator('.unlock-title')).toHaveText('Password Protected Paste');
+    const { id: encId } = (await encRes.json()) as { id: string };
+    await page.goto(`/${encId}`);
+    await expect(page.locator('.unlock-title')).toHaveText('Decryption Key Required');
     await expect(page.locator('.btn-unlock-submit')).toBeVisible();
 
     // D. 404 Minimal Page Visual Tokens
@@ -381,10 +361,10 @@ func main() {
   test('11. TTL listbox is keyboard operable and marks the default option', async ({ page }) => {
     await page.goto('/');
 
-    // The default TTL only carried aria-selected server-side, so the checkmark
-    // and amber highlight were missing until the user picked something.
+    // The default TTL (1d) only carried aria-selected server-side, so the
+    // checkmark and amber highlight were missing until the user picked something.
     await page.locator('#ttlTrigger').click();
-    await expect(page.locator('.ttl-option[data-ttl="30d"]')).toHaveClass(/selected/);
+    await expect(page.locator('.ttl-option[data-ttl="1d"]')).toHaveClass(/selected/);
     await page.keyboard.press('Escape');
     await expect(page.locator('#ttlMenu')).toBeHidden();
 
@@ -395,8 +375,8 @@ func main() {
     await page.keyboard.press('ArrowUp');
     await page.keyboard.press('Enter');
 
-    await expect(page.locator('#ttlInput')).toHaveValue('15d');
-    await expect(page.locator('#ttlValue')).toHaveText('15 Days');
+    await expect(page.locator('#ttlInput')).toHaveValue('1h');
+    await expect(page.locator('#ttlValue')).toHaveText('1 Hour');
     await expect(page.locator('#ttlTrigger')).toBeFocused();
   });
 
@@ -410,18 +390,20 @@ func main() {
     await expect(page.locator('#saveBtn')).toBeEnabled();
   });
 
-  test('13. Plaintext choice survives a password on/off cycle', async ({ page }) => {
+  test('13. Mode seg reflects the saved paste in the success modal', async ({ page }) => {
     await page.goto('/');
 
-    await page.locator('.toggle-e2ee').click();
-    await expect(page.locator('#toggleLabel')).toContainText('Plaintext');
+    // Plaintext default save → plaintext badge in modal
+    await page.locator('#content').fill('# Open memo');
+    await page.locator('button[type="submit"]').click();
+    await expect(page.locator('.px-modal-badges .badge-public')).toContainText('Plaintext');
+    await page.locator('#pxModalDoneBtn').click();
 
-    await page.locator('#btnPassModal').click();
-    await expect(page.locator('#toggleLabel')).toContainText('Password');
-
-    // Clearing the password used to silently force E2EE back on.
-    await page.locator('#btnPassModal').click();
-    await expect(page.locator('#toggleLabel')).toContainText('Plaintext');
+    // E2EE save → encrypted badge in modal
+    await page.locator('label:has(#e2eeToggle)').click();
+    await page.locator('#content').fill('# Sealed memo');
+    await page.locator('button[type="submit"]').click();
+    await expect(page.locator('.px-modal-badges .badge-encrypted')).toContainText('E2EE');
   });
 
   test('14. Draft autosave restores un-submitted text and allows discarding', async ({ page }) => {
@@ -472,27 +454,15 @@ func main() {
     expect(await textarea.inputValue()).toBe('- First item\n');
   });
 
-  test('16. Paper & Ink theme toggle switches between light parchment and dark ink and persists', async ({ page }) => {
+  test('16. Obsidian is the pinned theme with no toggle', async ({ page }) => {
     await page.goto('/');
 
-    const themeBtn = page.locator('#btnThemeToggle');
-    await expect(themeBtn).toBeVisible();
+    // Single-theme build: no toggle control, obsidian pinned statically.
+    await expect(page.locator('#btnThemeToggle')).toHaveCount(0);
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'obsidian');
 
-    // Toggle theme to light
-    await themeBtn.click();
-    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
-
-    // Reload page -> should remain light theme
     await page.reload();
-    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
-
-    // Toggle theme back to dark
-    await themeBtn.click();
-    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-
-    // Reload page -> should remain dark theme
-    await page.reload();
-    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'obsidian');
   });
 
 });

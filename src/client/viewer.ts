@@ -1,12 +1,10 @@
 import { clockSvg, copyIcon, lockIcon } from "../icons";
-import { ENC_PREFIX, PASS_PREFIX } from "../utils";
+import { ENC_PREFIX } from "../utils";
 import {
   base64UrlToBytes,
   copyToClipboard,
-  deriveKeyFromPassword,
   flashCopied,
   formatTimeLeft,
-  initThemeToggle,
   renderMarkdown,
 } from "./shared";
 
@@ -15,7 +13,6 @@ declare global {
     __PX0_DATA__?: {
       rawContent: string;
       isEncrypted: boolean;
-      isPasswordProtected: boolean;
       expiresAtMs?: number;
     };
     __PX0_DECRYPTED_TEXT__?: string;
@@ -36,7 +33,6 @@ function initPx0Data() {
     window.__PX0_DATA__ = {
       rawContent,
       isEncrypted: el.getAttribute("data-encrypted") === "true",
-      isPasswordProtected: el.getAttribute("data-password") === "true",
       expiresAtMs:
         expiresAtAttr && expiresAtAttr.trim() !== ""
           ? Number(expiresAtAttr)
@@ -101,9 +97,7 @@ function revealPasteActions() {
 function pasteText(): string {
   if (window.__PX0_DECRYPTED_TEXT__) return window.__PX0_DECRYPTED_TEXT__;
   const rawVal = window.__PX0_DATA__?.rawContent || "";
-  const encrypted =
-    rawVal.startsWith(PASS_PREFIX) || rawVal.startsWith(ENC_PREFIX);
-  return encrypted ? "" : rawVal;
+  return rawVal.startsWith(ENC_PREFIX) ? "" : rawVal;
 }
 
 async function copyContent() {
@@ -111,7 +105,7 @@ async function copyContent() {
   if (ok) flashCopied(document.getElementById("copyContentBtn"));
 }
 
-// Download, not /raw: this works for decrypted E2EE and password pastes, which
+// Download, not /raw: this works for decrypted E2EE pastes, which
 // /raw structurally cannot — it only ever sees the ciphertext.
 function downloadContent() {
   const text = pasteText();
@@ -148,70 +142,6 @@ function attachCodeBlockCopyButtons() {
     });
     pre.appendChild(btn);
   });
-}
-
-async function unlockPasswordPaste() {
-  const passInput = document.getElementById(
-    "unlockPass",
-  ) as HTMLInputElement | null;
-  const passErr = document.getElementById(
-    "passErr",
-  ) as HTMLParagraphElement | null;
-  const passVal = passInput ? passInput.value : "";
-  const rawContent = window.__PX0_DATA__?.rawContent || "";
-
-  if (!passVal) return;
-
-  // 600k PBKDF2 iterations take about a second on a phone, during which the
-  // page looked frozen and a second click queued another derivation.
-  const btn = document.getElementById(
-    "btnUnlockAction",
-  ) as HTMLButtonElement | null;
-  if (btn) {
-    if (btn.disabled) return;
-    btn.disabled = true;
-    btn.textContent = "Unlocking…";
-  }
-  const restoreBtn = () => {
-    if (!btn) return;
-    btn.disabled = false;
-    btn.textContent = "Unlock";
-  };
-
-  try {
-    // __PX0_PASS__:salt:iv:ciphertext
-    const parts = rawContent.slice(PASS_PREFIX.length).split(":");
-    if (parts.length < 3) {
-      if (passErr) passErr.textContent = "Malformed or corrupted payload!";
-      restoreBtn();
-      return;
-    }
-    const salt = base64UrlToBytes(parts[0]);
-    const iv = base64UrlToBytes(parts[1]);
-    const ciphertext = base64UrlToBytes(parts[2]);
-
-    const cryptoKey = await deriveKeyFromPassword(passVal, salt);
-    const decrypted = await crypto.subtle.decrypt(
-      { name: "AES-GCM", iv },
-      cryptoKey,
-      ciphertext,
-    );
-    const plaintext = new TextDecoder().decode(decrypted);
-
-    window.__PX0_DECRYPTED_TEXT__ = plaintext;
-
-    const outputEl = document.getElementById("output");
-    if (outputEl) {
-      outputEl.innerHTML = renderMarkdown(plaintext);
-    }
-    revealPasteActions();
-    attachCodeBlockCopyButtons();
-  } catch (_err) {
-    if (passErr)
-      passErr.textContent =
-        "Incorrect password, or the payload is corrupted — check it and try again.";
-    restoreBtn();
-  }
 }
 
 function bindDeleteButton() {
@@ -293,7 +223,6 @@ function preserveHashOnBurnReveal() {
 }
 
 async function initPageViewer() {
-  initThemeToggle();
   preserveHashOnBurnReveal();
   initPx0Data();
   startExpiryCountdown();
@@ -301,7 +230,7 @@ async function initPageViewer() {
   const data = window.__PX0_DATA__;
   if (!data) return;
 
-  const { isEncrypted, isPasswordProtected, rawContent } = data;
+  const { isEncrypted, rawContent } = data;
   const outputEl = document.getElementById("output");
   if (!outputEl) return;
 
@@ -315,56 +244,6 @@ async function initPageViewer() {
   if (downloadBtn && !downloadBtn.dataset.bound) {
     downloadBtn.addEventListener("click", downloadContent);
     downloadBtn.dataset.bound = "1";
-  }
-
-  if (isPasswordProtected) {
-    if (document.getElementById("unlockPass")) {
-      return;
-    }
-
-    outputEl.innerHTML = `
-      <div class="unlock-card-wrapper">
-        <div class="unlock-card">
-          <div class="unlock-icon-container">${lockIcon}</div>
-          <h1 class="unlock-title">Password Protected Paste</h1>
-          <p class="unlock-subtitle">Enter password to decrypt & view contents.</p>
-          <div class="unlock-form-row">
-            <input type="password" id="unlockPass" class="unlock-input" placeholder="Enter password…" aria-label="Paste password" aria-describedby="passErr" autocomplete="off">
-            <button type="button" id="btnUnlockAction" class="btn-unlock-submit">Unlock</button>
-          </div>
-          <p id="passErr" class="unlock-err-msg" role="alert"></p>
-        </div>
-      </div>
-    `;
-
-    const input = document.getElementById(
-      "unlockPass",
-    ) as HTMLInputElement | null;
-    const btnUnlock = document.getElementById(
-      "btnUnlockAction",
-    ) as HTMLButtonElement | null;
-    const passErr = document.getElementById(
-      "passErr",
-    ) as HTMLParagraphElement | null;
-
-    if (btnUnlock) {
-      btnUnlock.addEventListener("click", () => {
-        unlockPasswordPaste();
-      });
-    }
-    if (input) {
-      input.focus();
-      input.addEventListener("input", () => {
-        if (passErr) passErr.textContent = "";
-      });
-      input.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") {
-          unlockPasswordPaste();
-        }
-      });
-    }
-
-    return;
   }
 
   if (!isEncrypted) {
@@ -514,9 +393,8 @@ if (document.readyState === "loading") {
 }
 // The hash fragment only ever carries the E2EE key, so it is the only thing
 // worth re-initialising for. Re-running the whole init on any hash change
-// destroyed already-rendered content: following an in-page `#heading` link on
-// an unlocked password paste re-rendered the unlock card and made the reader
-// type the password again.
+// destroyed already-rendered content: following an in-page `#heading` link
+// re-rendered the unlock card and forced the reader to retry.
 window.addEventListener("hashchange", () => {
   if (window.__PX0_DATA__?.isEncrypted && !window.__PX0_DECRYPTED_TEXT__) {
     initPageViewer();

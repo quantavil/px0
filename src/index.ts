@@ -18,7 +18,6 @@ import {
   rawIcon,
   saveIcon,
   splitIcon,
-  sunIcon,
   trashIcon,
 } from "./icons";
 import {
@@ -35,11 +34,11 @@ import {
   generateShortId,
   getTtlSeconds,
   MAX_PASTE_BYTES,
-  PASS_PREFIX,
   TTL_MAP,
 } from "./utils";
 
-const THEME_BOOTSTRAP_SCRIPT = `<script>try{const t=localStorage.getItem("px0_theme")||"dark";document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>`;
+// Obsidian is the only theme. The <html> tag carries data-theme="obsidian"
+// statically, so there is no bootstrap script and the CSP needs no hash.
 
 type Bindings = {
   PASTES_KV: KVNamespace;
@@ -189,7 +188,7 @@ app.use("*", async (c, next) => {
   if (c.req.path !== "/") c.header("X-Robots-Tag", "noindex, nofollow");
   c.header(
     "Content-Security-Policy",
-    "default-src 'self'; script-src 'self' 'sha256-XjkRHMxOVpWt8fSou2GUS6QHAUDcdUwF9hYLYnMh9cw='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none';",
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none';",
   );
 });
 
@@ -228,15 +227,14 @@ app.get("/", (c) => {
   return c.html(
     html`
       <!DOCTYPE html>
-      <html lang="en">
+      <html lang="en" data-theme="obsidian">
       <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <meta name="theme-color" id="themeColor" content="#161b22">
-        <meta name="description" content="Minimalist markdown pastebin with zero-knowledge encryption, password protection and burn-after-read.">
+        <meta name="theme-color" content="#050505">
+        <meta name="description" content="Minimalist markdown pastebin with zero-knowledge encryption and burn-after-read.">
         <title>px0 - Minimalist Markdown Pastebin</title>
         <link rel="icon" type="image/svg+xml" href="/favicon.ico">
-        ${raw(THEME_BOOTSTRAP_SCRIPT)}
         <style>
           ${raw(CSS_VARIABLES)}
           ${raw(BASE_CSS)}
@@ -253,40 +251,9 @@ app.get("/", (c) => {
             </a>
 
             <div class="header-right">
-              <button type="button" id="btnThemeToggle" class="btn-action" title="Toggle Theme" aria-label="Toggle Theme">
-                ${raw(sunIcon)}
-              </button>
-              <button type="button" id="btnPassModal" class="btn-action" title="Toggle Password Protection" aria-label="Toggle Password Protection" aria-pressed="false">
-                ${raw(lockIcon)}
-              </button>
-              <div id="inlinePassBar" class="inline-pass-bar">
-                <input type="text" id="inlinePassInput" class="inline-pass-input" placeholder="Password…" aria-label="Paste password" autocomplete="off" spellcheck="false">
-                <button type="button" id="copyPassBtn" class="inline-pass-copy" title="Copy password" aria-label="Copy password">${raw(copyIcon)}</button>
-              </div>
-              <button type="button" id="btnSplit" class="btn-action" title="Toggle Split Live Preview" aria-label="Toggle Split Live Preview" aria-pressed="false">
-                ${raw(splitIcon)}
-              </button>
-              <div class="ttl-dropdown" id="ttlDropdown">
-                <button type="button" class="ttl-trigger" id="ttlTrigger" title="Paste Expiration Mode" aria-haspopup="listbox" aria-expanded="false">
-                  <span class="ttl-trigger-label" id="ttlValue">30 Days</span>
-                  ${raw(chevronDownIcon)}
-                </button>
-                <ul class="ttl-menu" id="ttlMenu" role="listbox" aria-label="Paste Expiration Mode" hidden>
-                  <li class="ttl-option" role="option" data-ttl="burn" aria-selected="false" title="Deletes itself on the first view. If nobody opens it, it expires after 24 hours."><span class="ttl-check">${raw(checkIcon)}</span>Burn once</li>
-                  <li class="ttl-option" role="option" data-ttl="15m" aria-selected="false"><span class="ttl-check">${raw(checkIcon)}</span>15 Minutes</li>
-                  <li class="ttl-option" role="option" data-ttl="30m" aria-selected="false"><span class="ttl-check">${raw(checkIcon)}</span>30 Minutes</li>
-                  <li class="ttl-option" role="option" data-ttl="1h" aria-selected="false"><span class="ttl-check">${raw(checkIcon)}</span>1 Hour</li>
-                  <li class="ttl-option" role="option" data-ttl="3h" aria-selected="false"><span class="ttl-check">${raw(checkIcon)}</span>3 Hours</li>
-                  <li class="ttl-option" role="option" data-ttl="6h" aria-selected="false"><span class="ttl-check">${raw(checkIcon)}</span>6 Hours</li>
-                  <li class="ttl-option" role="option" data-ttl="12h" aria-selected="false"><span class="ttl-check">${raw(checkIcon)}</span>12 Hours</li>
-                  <li class="ttl-option" role="option" data-ttl="1d" aria-selected="false"><span class="ttl-check">${raw(checkIcon)}</span>1 Day</li>
-                  <li class="ttl-option" role="option" data-ttl="3d" aria-selected="false"><span class="ttl-check">${raw(checkIcon)}</span>3 Days</li>
-                  <li class="ttl-option" role="option" data-ttl="7d" aria-selected="false"><span class="ttl-check">${raw(checkIcon)}</span>7 Days</li>
-                  <li class="ttl-option" role="option" data-ttl="15d" aria-selected="false"><span class="ttl-check">${raw(checkIcon)}</span>15 Days</li>
-                  <li class="ttl-option" role="option" data-ttl="30d" aria-selected="true"><span class="ttl-check">${raw(checkIcon)}</span>30 Days</li>
-                </ul>
-              </div>
-              <input type="hidden" id="ttlInput" value="30d">
+              <a href="/" class="btn-action" title="New Paste" aria-label="New Paste">
+                ${raw(plusIcon)}
+              </a>
             </div>
           </header>
 
@@ -297,12 +264,35 @@ app.get("/", (c) => {
 
           <footer class="footer-bar">
             <div class="footer-left">
+              <div class="mode-seg" role="group" aria-label="Paste mode">
+                <label class="seg-option" title="Store as-is — anyone with the link can read it">
+                  <input type="radio" name="mode" id="modePlaintext" checked>
+                  <span class="badge badge-public" id="modePlaintextLabel">${raw(globeSvg)} Plaintext</span>
+                </label>
+                <label class="seg-option" title="Zero-knowledge encrypted: the key never leaves your browser">
+                  <input type="radio" name="mode" id="e2eeToggle">
+                  <span class="badge badge-encrypted" id="toggleLabel">${raw(lockIcon)} E2EE</span>
+                </label>
+              </div>
+              <div class="ttl-dropdown" id="ttlDropdown">
+                <button type="button" class="ttl-trigger" id="ttlTrigger" title="Paste Expiration Mode" aria-haspopup="listbox" aria-expanded="false">
+                  <span class="ttl-trigger-label" id="ttlValue">1 Day</span>
+                  ${raw(chevronDownIcon)}
+                </button>
+                <ul class="ttl-menu ttl-menu-up" id="ttlMenu" role="listbox" aria-label="Paste Expiration Mode" hidden>
+                  <li class="ttl-option" role="option" data-ttl="burn" aria-selected="false" title="Deletes itself on the first view. If nobody opens it, it expires after 24 hours."><span class="ttl-check">${raw(checkIcon)}</span>Burn once</li>
+                  <li class="ttl-option" role="option" data-ttl="1h" aria-selected="false"><span class="ttl-check">${raw(checkIcon)}</span>1 Hour</li>
+                  <li class="ttl-option" role="option" data-ttl="1d" aria-selected="true"><span class="ttl-check">${raw(checkIcon)}</span>1 Day</li>
+                  <li class="ttl-option" role="option" data-ttl="7d" aria-selected="false"><span class="ttl-check">${raw(checkIcon)}</span>7 Days</li>
+                  <li class="ttl-option" role="option" data-ttl="30d" aria-selected="false"><span class="ttl-check">${raw(checkIcon)}</span>30 Days</li>
+                </ul>
+              </div>
+              <input type="hidden" id="ttlInput" value="1d">
+              <button type="button" id="btnSplit" class="btn-action" title="Toggle Split Live Preview" aria-label="Toggle Split Live Preview" aria-pressed="false">
+                ${raw(splitIcon)}
+              </button>
               <span id="charCount" class="stats-label">›_ 0 lines (0 B / 5MB)</span>
               <span id="draftContainer"></span>
-              <label class="toggle-e2ee" title="Click to toggle Zero-Knowledge Encryption">
-                <input type="checkbox" id="e2eeToggle" checked>
-                <span class="badge badge-encrypted" id="toggleLabel">${raw(lockIcon)} E2EE</span>
-              </label>
               <span id="saveError" class="save-error" role="alert"></span>
             </div>
 
@@ -463,14 +453,13 @@ app.get("/:id", async (c) => {
     return c.html(
       html`
         <!DOCTYPE html>
-        <html lang="en">
+        <html lang="en" data-theme="obsidian">
         <head>
           <meta charset="UTF-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <meta name="theme-color" id="themeColor" content="#161b22">
+          <meta name="theme-color" content="#050505">
           <title>404 - Paste Unavailable | px0</title>
           <link rel="icon" type="image/svg+xml" href="/favicon.ico">
-          ${raw(THEME_BOOTSTRAP_SCRIPT)}
           <style>
           ${raw(CSS_VARIABLES)}
           ${raw(BASE_CSS)}
@@ -481,7 +470,6 @@ app.get("/:id", async (c) => {
           <header>
             <a href="/" class="brand" title="px0 homepage">${raw(brandIcon)}</a>
             <div class="nav-links">
-              <button type="button" id="btnThemeToggle" class="btn-action" title="Toggle Theme" aria-label="Toggle Theme">${raw(sunIcon)}</button>
               <a href="/" class="btn-action" title="New Paste" aria-label="New Paste">${raw(plusIcon)}</a>
             </div>
           </header>
@@ -513,14 +501,13 @@ app.get("/:id", async (c) => {
     return c.html(
       html`
         <!DOCTYPE html>
-        <html lang="en">
+        <html lang="en" data-theme="obsidian">
         <head>
           <meta charset="UTF-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <meta name="theme-color" id="themeColor" content="#161b22">
+          <meta name="theme-color" content="#050505">
           <title>Burn-After-Read Paste | px0</title>
           <link rel="icon" type="image/svg+xml" href="/favicon.ico">
-          ${raw(THEME_BOOTSTRAP_SCRIPT)}
           <style>
             ${raw(CSS_VARIABLES)}
             ${raw(BASE_CSS)}
@@ -531,7 +518,6 @@ app.get("/:id", async (c) => {
           <header>
             <a href="/" class="brand" title="px0 homepage">${raw(brandIcon)}</a>
             <div class="nav-links">
-              <button type="button" id="btnThemeToggle" class="btn-action" title="Toggle Theme" aria-label="Toggle Theme">${raw(sunIcon)}</button>
               <a href="/" class="btn-action" title="New Paste" aria-label="New Paste">${raw(plusIcon)}</a>
             </div>
           </header>
@@ -568,13 +554,20 @@ app.get("/:id", async (c) => {
   const ttlLabel =
     expiresAtMs !== undefined ? formatTimeLeft(expiresAtMs - Date.now()) : "";
 
-  const isPasswordProtected = rawContent.startsWith(PASS_PREFIX);
+  // Password protection was removed: legacy password pastes are retired
+  // rather than rendered as ciphertext.
+  if (rawContent.startsWith("__PX0_PASS__:")) {
+    return c.text(
+      "Paste Unavailable — password pastes are no longer supported",
+      410,
+    );
+  }
   const isEncrypted = rawContent.startsWith(ENC_PREFIX);
   let renderedHtml = "";
 
-  if (!isEncrypted && !isPasswordProtected) {
+  if (!isEncrypted) {
     // Same renderer the browser uses for the live preview and for decrypted
-    // E2EE/password pastes, so every surface produces identical HTML.
+    // E2EE pastes, so every surface produces identical HTML.
     renderedHtml = renderMarkdown(rawContent);
   }
 
@@ -586,15 +579,14 @@ app.get("/:id", async (c) => {
   return c.html(
     html`
       <!DOCTYPE html>
-      <html lang="en">
+      <html lang="en" data-theme="obsidian">
       <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <meta name="theme-color" id="themeColor" content="#161b22">
-        <meta name="description" content="Minimalist markdown pastebin with zero-knowledge encryption, password protection and burn-after-read.">
+        <meta name="theme-color" content="#050505">
+        <meta name="description" content="Minimalist markdown pastebin with zero-knowledge encryption and burn-after-read.">
         <title>Paste ${id} - px0</title>
         <link rel="icon" type="image/svg+xml" href="/favicon.ico">
-        ${raw(THEME_BOOTSTRAP_SCRIPT)}
         <style>
           ${raw(CSS_VARIABLES)}
           ${raw(BASE_CSS)}
@@ -613,9 +605,8 @@ app.get("/:id", async (c) => {
           </div>
 
           <div class="nav-links">
-            <button type="button" id="btnThemeToggle" class="btn-action" title="Toggle Theme" aria-label="Toggle Theme">${raw(sunIcon)}</button>
             <a href="/" class="btn-action" title="New Paste" aria-label="New Paste">${raw(plusIcon)}</a>
-            <div id="pasteActions" class="paste-actions" style="display: ${isPasswordProtected || isEncrypted ? "none" : "flex"}; gap: 0.45rem; align-items: center;">
+            <div id="pasteActions" class="paste-actions" style="display: ${isEncrypted ? "none" : "flex"}; gap: 0.45rem; align-items: center;">
               <button type="button" class="btn-action" id="copyContentBtn" title="Copy Content" aria-label="Copy Content">${raw(copyIcon)}</button>
               <button type="button" class="btn-action" id="downloadBtn" title="Download as .md" aria-label="Download as Markdown">${raw(downloadIcon)}</button>
               ${
@@ -623,7 +614,7 @@ app.get("/:id", async (c) => {
                 // is the ciphertext, so the button was handing the reader
                 // `__PX0_ENC__:aGVsbG8…` right after they had successfully
                 // decrypted the page. Download covers that case instead.
-                isBurnAfterRead || isEncrypted || isPasswordProtected
+                isBurnAfterRead || isEncrypted
                   ? ""
                   : html`<a href="/raw/${id}" target="_blank" rel="noopener" class="btn-action" id="rawBtn" title="View Raw" aria-label="View Raw">${raw(rawIcon)}</a>`
               }
@@ -634,14 +625,14 @@ app.get("/:id", async (c) => {
         <main class="viewer-container">
           <div class="viewer-body">
             <div id="output" class="markdown-body">
-              ${isPasswordProtected ? "" : isEncrypted ? html`<p class="viewer-msg">Decrypting end-to-end encrypted payload in browser...</p>` : raw(renderedHtml)}
+              ${isEncrypted ? html`<p class="viewer-msg">Decrypting end-to-end encrypted payload in browser...</p>` : raw(renderedHtml)}
             </div>
           </div>
         </main>
 
         <footer class="footer-bar">
           <div class="footer-left">
-            ${isPasswordProtected ? html`<span class="badge badge-encrypted" title="Encrypted with a password (PBKDF2 + AES-GCM)">${raw(lockIcon)} Password</span>` : isEncrypted ? html`<span class="badge badge-encrypted" title="Zero-Knowledge Encrypted">${raw(lockIcon)} E2EE</span>` : html`<span class="badge badge-public" title="Stored unencrypted">${raw(globeSvg)} Plaintext</span>`}
+            ${isEncrypted ? html`<span class="badge badge-encrypted" title="Zero-Knowledge Encrypted">${raw(lockIcon)} E2EE</span>` : html`<span class="badge badge-public" title="Stored unencrypted">${raw(globeSvg)} Plaintext</span>`}
           </div>
           <div class="footer-right">
             ${
@@ -656,7 +647,7 @@ app.get("/:id", async (c) => {
           </div>
         </footer>
 
-        <script id="px0-data" type="application/json" data-encrypted="${isEncrypted ? "true" : "false"}" data-password="${isPasswordProtected ? "true" : "false"}" data-expires-at="${expiresAtMs ?? ""}">${raw(safeJsonData)}</script>
+        <script id="px0-data" type="application/json" data-encrypted="${isEncrypted ? "true" : "false"}" data-expires-at="${expiresAtMs ?? ""}">${raw(safeJsonData)}</script>
         <script src="/static/viewer.js" defer></script>
       </body>
       </html>

@@ -1,24 +1,24 @@
-// Centralized CSS custom properties and theme tokens
+// Centralized CSS custom properties — Obsidian is the only theme.
 export const CSS_VARIABLES = `
-  :root, [data-theme="dark"] {
+  :root, [data-theme="obsidian"] {
     color-scheme: dark;
 
-    --bg: #0f0e13;
-    --bg-radial: #171520;
-    --surface: #18161f;
-    --surface-hi: #221e2c;
-    --header-bg: rgba(24, 22, 31, 0.92);
+    --bg: #050505;
+    --bg-radial: #0c0b10;
+    --surface: #0c0b10;
+    --surface-hi: #14141b;
+    --header-bg: rgba(10, 10, 14, 0.82);
 
     --border: rgba(255, 255, 255, 0.1);
     --border-hover: rgba(255, 255, 255, 0.22);
 
-    --text: #ede9e1;
-    --text-muted: #928e85;
-    --text-dim: #6e6a62;
-    --text-accent: #0fb6d6;
-    --text-sub-accent: #f4569d;
+    --text: #f5f3ee;
+    --text-muted: #a8a49a;
+    --text-dim: #7d7a72;
+    --text-accent: #d29922;
+    --text-sub-accent: #d29922;
 
-    /* Semantic accents for Dark Ink */
+    /* Semantic accents for Obsidian */
     --amber: #d29922;
     --amber-fill: rgba(210, 153, 34, 0.12);
     --amber-line: rgba(210, 153, 34, 0.35);
@@ -28,21 +28,21 @@ export const CSS_VARIABLES = `
     --green-fill: rgba(63, 185, 80, 0.12);
     --green-line: rgba(63, 185, 80, 0.3);
 
-    --blue: #0fb6d6;
-    --blue-fill: rgba(15, 182, 214, 0.12);
-    --blue-line: rgba(15, 182, 214, 0.35);
+    --blue: #58a6ff;
+    --blue-fill: rgba(88, 166, 255, 0.12);
+    --blue-line: rgba(88, 166, 255, 0.35);
 
     --red: #f85149;
     --red-fill: rgba(248, 81, 73, 0.12);
     --red-line: rgba(248, 81, 73, 0.35);
 
     --code-bg: #141219;
-    --modal-bg: #161b22;
-    --modal-input-bg: #0d1117;
+    --modal-bg: #0c0b10;
+    --modal-input-bg: #14141b;
     --modal-shadow: rgba(0, 0, 0, 0.65);
-    --brand-text: #ede9e1;
+    --brand-text: #f5f3ee;
 
-    /* Dark mode syntax highlighting tokens */
+    /* Syntax highlighting tokens */
     --sh-keyword: #ff79c6;
     --sh-string: #e6db74;
     --sh-comment: #6272a4;
@@ -52,63 +52,12 @@ export const CSS_VARIABLES = `
 
     --radius: 8px;
     --radius-sm: 6px;
-    --radius-lg: 14px;
+    --radius-lg: 28px;
 
     --serif: "Charter", "Bitstream Charter", "Sitka Text", "Cambria", Georgia, serif;
     --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-    --sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --sans: "Plus Jakarta Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     --control-h: 32px;
-  }
-
-  [data-theme="light"] {
-    color-scheme: light;
-
-    --bg: #f8f6f0;
-    --bg-radial: #ede8dc;
-    --surface: #ffffff;
-    --surface-hi: #f2ede2;
-    --header-bg: rgba(248, 246, 240, 0.9);
-
-    --border: rgba(35, 32, 29, 0.12);
-    --border-hover: rgba(35, 32, 29, 0.25);
-
-    --text: #1a1917;
-    --text-muted: #6e6962;
-    --text-dim: #9c968c;
-    --text-accent: #1b588c;
-    --text-sub-accent: #9c27b0;
-
-    /* Semantic accents for Light Parchment */
-    --amber: #b85d19;
-    --amber-fill: rgba(184, 93, 25, 0.08);
-    --amber-line: rgba(184, 93, 25, 0.28);
-    --amber-glow: rgba(184, 93, 25, 0.18);
-
-    --green: #2d7a46;
-    --green-fill: rgba(45, 122, 70, 0.08);
-    --green-line: rgba(45, 122, 70, 0.28);
-
-    --blue: #1b588c;
-    --blue-fill: rgba(27, 88, 140, 0.08);
-    --blue-line: rgba(27, 88, 140, 0.28);
-
-    --red: #a62828;
-    --red-fill: rgba(166, 40, 40, 0.08);
-    --red-line: rgba(166, 40, 40, 0.28);
-
-    --code-bg: #f0ede4;
-    --modal-bg: #ffffff;
-    --modal-input-bg: #f5f2ea;
-    --modal-shadow: rgba(0, 0, 0, 0.18);
-    --brand-text: #1a1917;
-
-    /* Light mode syntax highlighting tokens */
-    --sh-keyword: #a020f0;
-    --sh-string: #8b5a00;
-    --sh-comment: #708090;
-    --sh-number: #0086b3;
-    --sh-identifier: #1f6f36;
-    --sh-sign: #444444;
   }
 `;
 
@@ -119,7 +68,10 @@ export const BASE_CSS = `
   html {
     min-height: 100%;
     background-color: var(--bg);
-    background-image: radial-gradient(circle at 50% 0%, var(--bg-radial) 0%, var(--bg) 80%);
+    background-image:
+      radial-gradient(600px 400px at 15% 10%, rgba(139, 92, 246, 0.14), transparent),
+      radial-gradient(700px 500px at 85% 20%, rgba(16, 185, 129, 0.1), transparent),
+      radial-gradient(800px 600px at 50% 100%, rgba(217, 153, 34, 0.08), transparent);
     color: var(--text);
     font-family: var(--sans);
     -webkit-font-smoothing: antialiased;
@@ -131,6 +83,17 @@ export const BASE_CSS = `
     flex-direction: column;
     background-color: transparent;
     color: inherit;
+  }
+
+  /* Film grain — fixed, non-scrolling, pointer-transparent. */
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    pointer-events: none;
+    opacity: 0.05;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='.85'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");
   }
 
   /* One visible focus treatment for every interactive element. */
@@ -164,36 +127,58 @@ export const BASE_CSS = `
     }
   }
 
+  /* Floating glass pills — the only header/footer chrome. */
   header, .footer-bar {
     background: var(--header-bg);
-    backdrop-filter: blur(16px);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0.5rem 1.25rem;
+    padding: 0.5rem 0.55rem 0.5rem 1.2rem;
     gap: 0.6rem;
     flex-shrink: 0;
     z-index: 10;
+    width: calc(100% - 2rem);
+    max-width: 76rem;
+    margin-left: auto;
+    margin-right: auto;
+    border: 1px solid var(--border);
+    border-radius: 999px;
   }
 
   header {
+    position: sticky;
+    top: 0.9rem;
     min-height: 52px;
-    border-bottom: 1px solid var(--border);
     flex-wrap: nowrap;
   }
 
   .footer-bar {
+    position: sticky;
+    bottom: 0.9rem;
     min-height: 52px;
-    border-top: 1px solid var(--border);
     margin-top: auto;
+    margin-bottom: 0.9rem;
+    flex-wrap: wrap;
+    row-gap: 0.5rem;
   }
 
-  .left-group, .footer-left {
+  .left-group {
     display: flex;
     align-items: center;
     gap: 0.75rem;
     flex-wrap: nowrap;
     min-width: 0;
+  }
+
+  .footer-left {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+    min-width: 0;
+    flex: 1;
   }
 
   .header-right, .footer-right, .nav-links {
@@ -207,9 +192,11 @@ export const BASE_CSS = `
 
   @media (max-width: 640px) {
     header, .footer-bar {
-      padding: 0.4rem 0.75rem;
+      padding: 0.45rem 0.55rem 0.45rem 0.9rem;
       gap: 0.4rem;
       min-height: 48px;
+      width: calc(100% - 1rem);
+      border-radius: 1.4rem;
     }
     .left-group, .footer-left {
       gap: 0.4rem;
@@ -246,7 +233,7 @@ export const BASE_CSS = `
      visual glyph size. Header min-height (48px) still fits. */
   @media (pointer: coarse) {
     .btn-action { width: 40px; height: 40px; }
-    .inline-pass-copy { width: 40px; height: 40px; }
+    .seg-option .badge { min-height: 40px; }
     .px-modal-close { width: 40px; height: 40px; }
   }
 
@@ -304,8 +291,7 @@ export const BASE_CSS = `
   }
 
   .btn-action.copied,
-  .code-copy-btn.copied,
-  .inline-pass-copy.copied {
+  .code-copy-btn.copied {
     color: var(--green);
     background: var(--green-fill);
     border-color: var(--green-line);
@@ -387,12 +373,9 @@ export const BASE_CSS = `
   ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.12); border-radius: 4px; }
   ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.22); }
 
-  /* Light theme: dark translucent thumbs, and truncation guards so the
-     320px-wide header/footer ellipsize instead of pushing Save off-screen. */
-  [data-theme="light"] ::-webkit-scrollbar-thumb { background: rgba(35, 32, 29, 0.22); }
-  [data-theme="light"] ::-webkit-scrollbar-thumb:hover { background: rgba(35, 32, 29, 0.35); }
-
-  .footer-left { overflow: hidden; }
+  /* Truncation guards so a 320px-wide footer ellipsizes instead of pushing
+     Save off-screen. NOTE: .footer-left must stay overflow:visible — the
+     TTL menu opens upward out of it and overflow:hidden would clip it. */
   #charCount {
     min-width: 0;
     overflow: hidden;
@@ -418,17 +401,9 @@ export const BASE_CSS = `
 
 // Shared Markdown typography and syntax highlighting styles
 export const MARKDOWN_CSS = `
-  /* Selection rescue: ensures gradient text remains 100% visible when selected */
   ::selection {
-    background-color: rgba(15, 182, 214, 0.35);
+    background-color: rgba(210, 153, 34, 0.35);
     color: var(--text);
-    -webkit-text-fill-color: var(--text);
-  }
-
-  :is(h1, h2, h3, h4, h5, h6, strong, em)::selection {
-    -webkit-text-fill-color: var(--text) !important;
-    background-clip: border-box !important;
-    -webkit-background-clip: border-box !important;
   }
 
   .markdown-body, .preview-pane {
@@ -440,57 +415,24 @@ export const MARKDOWN_CSS = `
 
   .markdown-body > :first-child, .preview-pane > :first-child { margin-top: 0; }
 
-  /* Gradient headings with fade-out underlines */
+  /* Solid ink headings with a fading underline — one treatment, every level. */
   .markdown-body :is(h1, h2, h3, h4, h5, h6),
   .preview-pane :is(h1, h2, h3, h4, h5, h6) {
-    position: relative;
+    color: var(--text);
+    border-bottom: 1px solid var(--border);
     padding-bottom: 0.5rem;
-    border-bottom: 1px solid;
-    border-image-slice: 1;
-    background-clip: text;
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
+    letter-spacing: -0.02em;
   }
 
-  .markdown-body h1, .preview-pane h1 { font-size: 2.1rem; font-weight: 700; background-image: linear-gradient(135deg, #0fb6d6, #bb9af7); border-image-source: linear-gradient(to right, #0fb6d6, transparent 35%); margin: 1.75rem 0 1rem; letter-spacing: -0.02em; }
-  .markdown-body h2, .preview-pane h2 { font-size: 1.6rem; font-weight: 600; background-image: linear-gradient(135deg, #e04f90, #e2a360); border-image-source: linear-gradient(to right, #e04f90, transparent 35%); margin: 1.5rem 0 0.85rem; letter-spacing: -0.01em; }
-  .markdown-body h3, .preview-pane h3 { font-size: 1.3rem; font-weight: 600; background-image: linear-gradient(135deg, #4ade80, #3b82f6); border-image-source: linear-gradient(to right, #4ade80, transparent 35%); margin: 1.25rem 0 0.75rem; }
-  .markdown-body h4, .preview-pane h4 { font-size: 1.1rem; font-weight: 600; background-image: linear-gradient(135deg, #bb9af7, #ff7a7a); border-image-source: linear-gradient(to right, #bb9af7, transparent 35%); margin: 1.1rem 0 0.6rem; }
-  .markdown-body h5, .preview-pane h5 { font-size: 0.95rem; font-weight: 600; background-image: linear-gradient(135deg, #45e0a2, #45aaff); border-image-source: linear-gradient(to right, #45e0a2, transparent 35%); margin: 1rem 0 0.5rem; }
-  .markdown-body h6, .preview-pane h6 { font-size: 0.95rem; font-weight: 600; background-image: linear-gradient(135deg, #ffc93c, #f4569d); border-image-source: linear-gradient(to right, #ffc93c, transparent 35%); margin: 1rem 0 0.5rem; }
+  .markdown-body h1, .preview-pane h1 { font-size: 2.1rem; font-weight: 700; margin: 1.75rem 0 1rem; }
+  .markdown-body h2, .preview-pane h2 { font-size: 1.6rem; font-weight: 600; margin: 1.5rem 0 0.85rem; }
+  .markdown-body h3, .preview-pane h3 { font-size: 1.3rem; font-weight: 600; margin: 1.25rem 0 0.75rem; }
+  .markdown-body h4, .preview-pane h4 { font-size: 1.1rem; font-weight: 600; margin: 1.1rem 0 0.6rem; }
+  .markdown-body h5, .preview-pane h5 { font-size: 0.95rem; font-weight: 600; margin: 1rem 0 0.5rem; }
+  .markdown-body h6, .preview-pane h6 { font-size: 0.95rem; font-weight: 600; margin: 1rem 0 0.5rem; }
 
-  /* Text style gradients: bold, italic, bold-italic */
-  .markdown-body strong, .preview-pane strong {
-    font-weight: 700;
-    background-image: linear-gradient(135deg, #ff9a56, #ff6b6b);
-    background-clip: text;
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-  }
-  .markdown-body em, .preview-pane em {
-    font-style: italic;
-    background-image: linear-gradient(135deg, #7de6eb, #3fe9cf);
-    background-clip: text;
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-  }
-  .markdown-body strong em, .markdown-body em strong,
-  .preview-pane strong em, .preview-pane em strong {
-    font-weight: 700;
-    font-style: italic;
-    background-image: linear-gradient(135deg, #ff6ec7, #ff93ac);
-    background-clip: text;
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-  }
-
-  /* Reset links and inline code inside headings or bold/italic */
-  :is(.markdown-body, .preview-pane) :is(h1, h2, h3, h4, h5, h6, strong, em) :is(a, code) {
-    -webkit-text-fill-color: currentColor !important;
-    background-image: none !important;
-    background-clip: border-box !important;
-    -webkit-background-clip: border-box !important;
-  }
+  .markdown-body strong, .preview-pane strong { font-weight: 700; }
+  .markdown-body em, .preview-pane em { font-style: italic; }
 
   .markdown-body p, .preview-pane p { margin-bottom: 1.1rem; word-break: break-word; }
   .markdown-body ul, .markdown-body ol, .preview-pane ul, .preview-pane ol { margin: 0.75rem 0 1.1rem 1.75rem; }
@@ -515,54 +457,23 @@ export const MARKDOWN_CSS = `
   }
 
   .markdown-body blockquote blockquote blockquote, .preview-pane blockquote blockquote blockquote {
-    border-left-color: var(--blue);
-    background: linear-gradient(to right, var(--blue-fill), var(--bg));
+    border-left-color: var(--amber);
+    background: var(--amber-fill);
   }
 
-  /* Anthracite Decorative Horizontal Rules with center ornament and top hairline */
+  /* Quiet hairline rule. */
   .markdown-body hr, .preview-pane hr {
-    position: relative;
-    height: 2px;
-    border: none;
-    margin: 2.25rem 0;
-    background: linear-gradient(90deg, transparent 0%, rgba(15, 182, 214, 0.15) 12%, rgba(15, 182, 214, 0.55) 35%, rgba(244, 86, 157, 0.55) 65%, rgba(15, 182, 214, 0.15) 88%, transparent 100%);
-    border-radius: 999px;
-    box-shadow: 0 0 18px rgba(15, 182, 214, 0.18);
-    overflow: visible;
-  }
-
-  .markdown-body hr::before, .preview-pane hr::before {
-    content: '';
-    position: absolute;
-    top: -6px;
-    left: 0;
-    right: 0;
     height: 1px;
-    background: linear-gradient(90deg, transparent 0%, rgba(15, 182, 214, 0.08) 20%, rgba(15, 182, 214, 0.22) 50%, rgba(15, 182, 214, 0.08) 80%, transparent 100%);
-    border-radius: 999px;
+    border: none;
+    margin: 2rem 0;
+    background: var(--border-hover);
   }
 
-  .markdown-body hr::after, .preview-pane hr::after {
-    content: "✦";
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    padding: 0 0.35rem;
-    background: var(--bg);
-    color: #0fb6d6;
-    font-size: 0.9rem;
-    font-weight: 700;
-    text-shadow: 0 0 8px rgba(15, 182, 214, 0.8);
-  }
-
-  .markdown-body a, .preview-pane a { color: #5ec4e0; text-decoration: none; text-underline-offset: 3px; word-break: break-word; transition: color 0.2s ease; }
-  .markdown-body a:hover, .preview-pane a:hover { color: #bbecff; text-decoration: underline; }
-  [data-theme="light"] .markdown-body a, [data-theme="light"] .preview-pane a { color: var(--text-accent); }
-  [data-theme="light"] .markdown-body a:hover, [data-theme="light"] .preview-pane a:hover { color: var(--text-accent); filter: brightness(0.8); }
+  .markdown-body a, .preview-pane a { color: var(--amber); text-decoration: none; text-underline-offset: 3px; word-break: break-word; transition: color 0.2s ease; }
+  .markdown-body a:hover, .preview-pane a:hover { color: var(--amber); text-decoration: underline; filter: brightness(1.25); }
   .markdown-body del, .preview-pane del { color: var(--text-muted); }
 
-  /* GFM tables — Anthracite cyan borders & headers */
+  /* GFM tables — token borders, amber-tinted headers. */
   .markdown-body table, .preview-pane table {
     display: block;
     width: max-content;
@@ -575,24 +486,20 @@ export const MARKDOWN_CSS = `
 
   .markdown-body th, .markdown-body td,
   .preview-pane th, .preview-pane td {
-    border: 1px solid rgba(15, 182, 214, 0.18);
+    border: 1px solid var(--border-hover);
     padding: 0.5rem 0.85rem;
     text-align: left;
   }
 
   .markdown-body th, .preview-pane th {
-    background: rgba(15, 182, 214, 0.08);
-    color: #0fb6d6;
+    background: var(--amber-fill);
+    color: var(--amber);
     font-weight: 600;
-  }
-  [data-theme="light"] .markdown-body th, [data-theme="light"] .preview-pane th {
-    background: var(--blue-fill);
-    color: var(--blue);
   }
 
   .markdown-body tbody tr:nth-child(even),
   .preview-pane tbody tr:nth-child(even) {
-    background: rgba(15, 182, 214, 0.02);
+    background: rgba(255, 255, 255, 0.02);
   }
 
   .markdown-body img, .preview-pane img {
@@ -620,8 +527,8 @@ export const MARKDOWN_CSS = `
   }
 
   .markdown-body input[type="checkbox"]:checked, .preview-pane input[type="checkbox"]:checked {
-    background: var(--text-accent);
-    border-color: var(--text-accent);
+    background: var(--amber);
+    border-color: var(--amber);
     animation: px-check-bounce 0.25s ease;
   }
 
@@ -705,16 +612,12 @@ export const MARKDOWN_CSS = `
   }
 
   .markdown-body :not(pre) > code, .preview-pane :not(pre) > code {
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: var(--amber-fill);
+    border: 1px solid var(--amber-line);
     padding: 0.15rem 0.4rem;
     border-radius: 5px;
-    color: var(--sh-number);
+    color: var(--amber);
     word-break: break-word;
-  }
-  [data-theme="light"] .markdown-body :not(pre) > code, [data-theme="light"] .preview-pane :not(pre) > code {
-    background: var(--code-bg);
-    border-color: var(--border);
   }
 
   .sh__token--keyword { color: var(--sh-keyword); font-weight: 600; }
@@ -723,58 +626,44 @@ export const MARKDOWN_CSS = `
   .sh__token--number { color: var(--sh-number); }
   .sh__token--identifier { color: var(--sh-identifier); }
   .sh__token--sign { color: var(--sh-sign); }
-
-  /* Light Parchment: neon gradient text fails contrast on white, so content
-     emphasis falls back to solid ink. Dark keeps the gradient treatment. */
-  [data-theme="light"] :is(.markdown-body, .preview-pane) :is(h1, h2, h3, h4, h5, h6, strong, em, strong em, em strong) {
-    background-image: none;
-    -webkit-text-fill-color: currentColor;
-    color: var(--text);
-    border-image-source: linear-gradient(to right, var(--border-hover), transparent 35%);
-  }
-  [data-theme="light"] :is(.markdown-body, .preview-pane) em { color: var(--text); }
 `;
 
 // Landing page editor, live split preview, footer bar and share banner
 export const LANDING_CSS = `
   body { overflow: hidden; }
 
-  .toggle-e2ee {
+  /* Plaintext/E2EE segmented control. Two radios, one name — the browser
+     keeps them mutually exclusive, so no JS state can disagree. */
+  .mode-seg {
     display: flex;
-    align-items: center;
-    cursor: pointer;
-    user-select: none;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    overflow: hidden;
+    flex-shrink: 0;
   }
 
+  .seg-option { cursor: pointer; }
+
   /* 1px rather than 0 — a zero-sized control drops out of the accessibility
-     tree in Chrome, hiding the encryption switch from screen readers. */
-  .toggle-e2ee input {
+     tree in Chrome, hiding the mode switch from screen readers. */
+  .seg-option input {
     position: absolute;
     opacity: 0;
     width: 1px;
     height: 1px;
   }
 
-  /* This badge is a switch, not a status label. Without a caret and a hover
-     lift nothing said it was clickable, so Plaintext mode was undiscoverable. */
-  .toggle-e2ee .badge::after {
-    content: "";
-    width: 0;
-    height: 0;
-    margin-left: 0.1rem;
-    border-left: 3.5px solid transparent;
-    border-right: 3.5px solid transparent;
-    border-top: 4px solid currentColor;
-    opacity: 0.75;
+  .seg-option .badge {
+    border: 0;
+    border-radius: 0;
+    opacity: 0.55;
+    transition: opacity 0.2s ease, background 0.2s ease;
   }
 
-  .toggle-e2ee:hover .badge { filter: brightness(1.3); border-color: currentColor; }
-
-  /* Password mode forces plaintext-vs-E2EE off; show that it's not clickable. */
-  .toggle-e2ee:has(input:disabled) { cursor: not-allowed; }
-  .toggle-e2ee:has(input:disabled) .badge::after { display: none; }
-  .toggle-e2ee:has(input:disabled):hover .badge { filter: none; }
-  .toggle-e2ee input:focus-visible + .badge { outline: 2px solid var(--amber); outline-offset: 2px; }
+  .seg-option input:checked + .badge { opacity: 1; }
+  .seg-option input:checked + .badge-public { background: var(--blue-fill); }
+  .seg-option input:checked + .badge-encrypted { background: var(--green-fill); }
+  .seg-option input:focus-visible + .badge { outline: 2px solid var(--amber); outline-offset: -2px; }
 
   .ttl-dropdown { position: relative; }
 
@@ -819,6 +708,12 @@ export const LANDING_CSS = `
   }
 
   .ttl-menu[hidden] { display: none; }
+
+  /* The TTL control lives in the bottom pill now, so the menu opens upward. */
+  .ttl-menu-up {
+    top: auto;
+    bottom: calc(100% + 0.4rem);
+  }
   .ttl-option {
     display: flex;
     align-items: center;
@@ -928,70 +823,6 @@ export const LANDING_CSS = `
   }
 
   .save-error:empty { display: none; }
-
-  .inline-pass-bar {
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-    max-width: 0;
-    opacity: 0;
-    overflow: hidden;
-    pointer-events: none;
-    /* visibility, not just opacity: an opacity-0 input still takes Tab focus,
-       so keyboard users landed in an invisible password field. */
-    visibility: hidden;
-    transition: max-width 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease, visibility 0.2s;
-    white-space: nowrap;
-  }
-
-  .inline-pass-bar.visible {
-    max-width: 200px;
-    opacity: 1;
-    pointer-events: auto;
-    visibility: visible;
-  }
-
-  .inline-pass-copy {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    padding: 0;
-    border: 1px solid var(--border);
-    border-radius: 7px;
-    background: rgba(255, 255, 255, 0.04);
-    color: var(--text-muted);
-    cursor: pointer;
-    transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease;
-    flex-shrink: 0;
-  }
-
-  .inline-pass-copy:hover {
-    color: var(--amber);
-    border-color: var(--amber-line);
-    background: var(--amber-fill);
-  }
-
-  .inline-pass-input {
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid var(--border);
-    color: var(--text);
-    font-family: var(--mono);
-    font-size: 0.75rem;
-    font-weight: 500;
-    padding: 0 0.5rem;
-    border-radius: 7px;
-    width: 120px;
-    height: 28px;
-    outline: none;
-    transition: border-color 0.2s ease, background 0.2s ease;
-  }
-
-  .inline-pass-input:focus {
-    border-color: var(--amber);
-    background: rgba(255, 255, 255, 0.08);
-  }
 
   /* Centered Modal Dialog for Post-Save Flow */
   .px-modal-overlay {
@@ -1281,9 +1112,6 @@ export const LANDING_CSS = `
       border-left: none;
       border-top: 1px solid var(--border);
     }
-
-    .inline-pass-bar.visible { max-width: 150px; }
-    .inline-pass-input { width: 95px; }
   }
 
   @media (max-width: 640px) {
@@ -1334,12 +1162,13 @@ export const LANDING_CSS = `
       width: 100%;
     }
 
-    .inline-pass-bar.visible { max-width: 125px; }
-    .inline-pass-input { width: 75px; }
+    .footer-bar { row-gap: 0.6rem; }
+    .footer-left { width: 100%; }
+    #saveBtn { width: 100%; }
   }
 `;
 
-// Viewer page layout and the password unlock card
+// Viewer page layout and the E2EE unlock card
 export const VIEWER_CSS = `
   .btn-delete {
     display: inline-flex;
@@ -1425,7 +1254,7 @@ export const VIEWER_CSS = `
   .unlock-card {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 16px;
+    border-radius: 22px;
     max-width: 440px;
     width: 100%;
     padding: 2.25rem 2rem;
@@ -1512,10 +1341,7 @@ export const VIEWER_CSS = `
 // Borderless, ultra-minimal 404 page styles
 export const NOT_FOUND_CSS = `
   body {
-    background-image: radial-gradient(circle at 50% 30%, #161b22 0%, #0d1117 80%);
-  }
-  [data-theme="light"] body {
-    background-image: radial-gradient(circle at 50% 30%, #ede8dc 0%, #f8f6f0 80%);
+    background-image: radial-gradient(circle at 50% 30%, #101014 0%, #050505 80%);
   }
 
   .not-found-wrapper {

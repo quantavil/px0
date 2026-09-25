@@ -1,59 +1,8 @@
 import { marked } from "marked";
 import { highlight } from "sugar-high";
-import { moonIcon, sunIcon } from "../icons";
 import { decodeBase64Url, sanitizeHtml } from "../utils";
 
 export { bytesToBase64Url } from "../utils";
-
-export function initThemeToggle() {
-  const btn = document.getElementById(
-    "btnThemeToggle",
-  ) as HTMLButtonElement | null;
-  if (!btn) return;
-
-  function getEffectiveTheme(): "light" | "dark" {
-    const explicit = document.documentElement.getAttribute("data-theme");
-    if (explicit === "light" || explicit === "dark") return explicit;
-    try {
-      const stored = localStorage.getItem("px0_theme");
-      if (stored === "light" || stored === "dark") return stored;
-    } catch {}
-    return "dark";
-  }
-
-  function updateThemeUI(button: HTMLButtonElement, theme: "light" | "dark") {
-    document.documentElement.setAttribute("data-theme", theme);
-    button.innerHTML = theme === "dark" ? sunIcon : moonIcon;
-    button.title =
-      theme === "dark" ? "Switch to Light Theme" : "Switch to Dark Theme";
-    button.setAttribute("aria-label", button.title);
-    // Keep the browser chrome in sync — the SSR meta defaults to dark.
-    const themeMeta = document.getElementById("themeColor");
-    if (themeMeta) {
-      themeMeta.setAttribute(
-        "content",
-        theme === "dark" ? "#161b22" : "#f8f6f0",
-      );
-    }
-  }
-
-  const current = getEffectiveTheme();
-  updateThemeUI(btn, current);
-
-  if (!btn.dataset.boundTheme) {
-    btn.dataset.boundTheme = "1";
-    btn.addEventListener("click", () => {
-      const now =
-        document.documentElement.getAttribute("data-theme") === "light"
-          ? "dark"
-          : "light";
-      try {
-        localStorage.setItem("px0_theme", now);
-      } catch {}
-      updateThemeUI(btn, now);
-    });
-  }
-}
 
 export function formatTimeLeft(ms: number): string {
   if (ms <= 0) return "expired";
@@ -177,7 +126,7 @@ export function sanitizeOutputHtml(htmlStr: string): string {
 }
 
 // Single markdown configuration shared by the server renderer and the browser
-// (live preview + decrypted E2EE/password pastes), so every surface produces
+// (live preview + decrypted E2EE pastes), so every surface produces
 // byte-identical HTML.
 marked.use({
   gfm: true,
@@ -259,32 +208,6 @@ export function flashCopied(el: Element | null, ms = 2000) {
   setTimeout(() => el.classList.remove("copied"), ms);
 }
 
-export async function deriveKeyFromPassword(
-  password: string,
-  salt: Uint8Array<ArrayBuffer>,
-): Promise<CryptoKey> {
-  const enc = new TextEncoder();
-  const masterKey = await crypto.subtle.importKey(
-    "raw",
-    enc.encode(password),
-    "PBKDF2",
-    false,
-    ["deriveKey"],
-  );
-  return crypto.subtle.deriveKey(
-    {
-      name: "PBKDF2",
-      salt: salt,
-      iterations: 600000,
-      hash: "SHA-256",
-    },
-    masterKey,
-    { name: "AES-GCM", length: 256 },
-    false,
-    ["encrypt", "decrypt"],
-  );
-}
-
 // Base64url string -> bytes. Mirrors bytesToBase64Url on the encode side.
 // Returns Uint8Array<ArrayBuffer> (not ArrayBufferLike) so the result is
 // directly usable as a WebCrypto BufferSource.
@@ -293,50 +216,4 @@ export function base64UrlToBytes(str: string): Uint8Array<ArrayBuffer> {
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   return bytes;
-}
-
-const getUniformRandomChar = (charset: string): string =>
-  charset[uniformIndex(charset.length)];
-
-export function generate8CharPassword(): string {
-  // Ambiguous glyphs (I/l/1, O/0) are excluded so passwords survive being
-  // read off a screen and retyped.
-  const uppers = "ABCDEFGHJKLMNPQRSTUVWXYZ";
-  const lowers = "abcdefghijkmnopqrstuvwxyz";
-  const numbers = "23456789";
-  const symbols = "!@#$%^&*";
-  const all = uppers + lowers + numbers + symbols;
-
-  const password = [
-    getUniformRandomChar(uppers),
-    getUniformRandomChar(lowers),
-    getUniformRandomChar(numbers),
-    getUniformRandomChar(symbols),
-    getUniformRandomChar(all),
-    getUniformRandomChar(all),
-    getUniformRandomChar(all),
-    getUniformRandomChar(all),
-  ];
-
-  // Fisher-Yates with a rejection-sampled index so the guaranteed-class
-  // characters don't stay pinned to the first four positions.
-  for (let i = password.length - 1; i > 0; i--) {
-    const j = uniformIndex(i + 1);
-    [password[i], password[j]] = [password[j], password[i]];
-  }
-
-  return password.join("");
-}
-
-// Rejection sampling: a plain `byte % range` biases the low indices whenever
-// range doesn't divide 256.
-function uniformIndex(range: number): number {
-  const maxValid = 256 - (256 % range);
-  const buf = new Uint8Array(1);
-  let val: number;
-  do {
-    crypto.getRandomValues(buf);
-    val = buf[0];
-  } while (val >= maxValid);
-  return val % range;
 }
