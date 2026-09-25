@@ -628,6 +628,35 @@ export const MARKDOWN_CSS = `
 export const LANDING_CSS = `
   body { overflow: hidden; }
 
+  /* Slim status strip above the editor: view/status concerns (counter,
+     draft notice, save error, split toggle) live here so the bottom pill
+     stays a single row of save decisions. */
+  .util-strip {
+    width: 100%;
+    max-width: 76rem;
+    margin: 0.85rem auto 0;
+    padding: 0 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+    flex-shrink: 0;
+  }
+
+  .util-left {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+    min-width: 0;
+    font-size: 0.72rem;
+  }
+
+  .util-strip .btn-action {
+    width: 30px;
+    height: 30px;
+  }
+
   /* Plaintext/E2EE segmented control with a sliding thumb. Two radios, one
      name — the browser keeps them mutually exclusive, and the :checked
      styles show the choice, so no JS label sync is needed. Unselected side
@@ -661,6 +690,8 @@ export const LANDING_CSS = `
     z-index: 1;
     flex: 1;
     display: flex;
+    min-width: 0;
+    overflow: hidden;
     cursor: pointer;
   }
 
@@ -695,6 +726,17 @@ export const LANDING_CSS = `
   }
 
   .seg-option input:focus-visible + .badge { outline: 2px solid var(--amber); outline-offset: -2px; }
+
+  /* Short labels on narrow screens: "Plaintext" is wider than its half and
+     would bleed under the opposite thumb. */
+  .seg-short { display: none; }
+
+  @media (max-width: 520px) {
+    .seg-full { display: none; }
+    .seg-short { display: inline; }
+    .seg-option .badge { padding-left: 0.4rem; padding-right: 0.4rem; }
+    .btn-save { padding: 0 1rem; }
+  }
 
   .ttl-dropdown { position: relative; }
 
@@ -1194,25 +1236,6 @@ export const LANDING_CSS = `
       justify-content: center;
       width: 100%;
     }
-
-    .footer-bar { row-gap: 0.6rem; }
-
-    /* Two-row footer: seg + Save on row one, TTL + split + inline counter
-       on row two. display:contents dissolves the two wrapper divs so each
-       control orders individually; the counter never gets its own row. */
-    .footer-left, .footer-right { display: contents; }
-    .mode-seg { order: 1; flex: 1 1 auto; }
-    #saveBtn { order: 2; flex: 0 0 auto; }
-    .ttl-dropdown { order: 3; }
-    #btnSplit { order: 4; }
-    #charCount {
-      order: 5;
-      flex: 1 1 auto;
-      text-align: right;
-      font-size: 0.7rem;
-    }
-    #draftContainer, #saveError { order: 6; flex-basis: 100%; }
-    #draftContainer:empty { display: none; }
   }
 `;
 

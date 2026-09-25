@@ -257,6 +257,17 @@ app.get("/", (c) => {
             </div>
           </header>
 
+          <div class="util-strip">
+            <div class="util-left">
+              <span id="charCount" class="stats-label" title="0 lines (0 B / 5MB)">0 lines · 0 B</span>
+              <span id="draftContainer"></span>
+              <span id="saveError" class="save-error" role="alert"></span>
+            </div>
+            <button type="button" id="btnSplit" class="btn-action" title="Toggle Split Live Preview" aria-label="Toggle Split Live Preview" aria-pressed="false">
+              ${raw(splitIcon)}
+            </button>
+          </div>
+
           <div id="editorContainer" class="editor-container">
             <textarea id="content" aria-label="Paste content" placeholder="Go ahead, type something…&#10;(you can paste markdown or code here)"></textarea>
             <div id="previewPane" class="preview-pane"></div>
@@ -267,7 +278,7 @@ app.get("/", (c) => {
               <div class="mode-seg" role="group" aria-label="Paste mode">
                 <label class="seg-option" title="Store as-is — anyone with the link can read it">
                   <input type="radio" name="mode" id="modePlaintext" checked>
-                  <span class="badge badge-public" id="modePlaintextLabel">${raw(globeSvg)} Plaintext</span>
+                  <span class="badge badge-public" id="modePlaintextLabel">${raw(globeSvg)}<span class="seg-full">Plaintext</span><span class="seg-short">Plain</span></span>
                 </label>
                 <label class="seg-option" title="Zero-knowledge encrypted: the key never leaves your browser">
                   <input type="radio" name="mode" id="e2eeToggle">
@@ -288,12 +299,6 @@ app.get("/", (c) => {
                 </ul>
               </div>
               <input type="hidden" id="ttlInput" value="1d">
-              <button type="button" id="btnSplit" class="btn-action" title="Toggle Split Live Preview" aria-label="Toggle Split Live Preview" aria-pressed="false">
-                ${raw(splitIcon)}
-              </button>
-              <span id="charCount" class="stats-label" title="0 lines (0 B / 5MB)">0 lines · 0 B</span>
-              <span id="draftContainer"></span>
-              <span id="saveError" class="save-error" role="alert"></span>
             </div>
 
             <div class="footer-right">

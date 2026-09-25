@@ -10,7 +10,10 @@ test.describe('px0 E2E Browser Test Suite', () => {
     // Plaintext is the default mode; E2EE is opt-in via the footer seg.
     await expect(page.locator('#modePlaintext')).toBeChecked();
     await expect(page.locator('#toggleLabel')).toContainText('E2EE');
-    await expect(page.locator('#charCount')).toContainText('0 lines · 0 B');
+    // Status strip above the editor holds counter + split; footer is one row.
+    await expect(page.locator('.util-strip #charCount')).toContainText('0 lines · 0 B');
+    await expect(page.locator('.util-strip #btnSplit')).toBeVisible();
+    await expect(page.locator('.footer-bar #saveBtn')).toBeVisible();
 
     const textarea = page.locator('#content');
     await textarea.fill('Line 1\nLine 2\nLine 3');
