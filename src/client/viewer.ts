@@ -136,9 +136,13 @@ function attachCodeBlockCopyButtons() {
     btn.title = "Copy code";
     btn.setAttribute("aria-label", "Copy code");
     btn.innerHTML = copyIcon;
-    btn.addEventListener("click", () => {
-      copyToClipboard(pre.querySelector("code")?.textContent || "");
-      flashCopied(btn);
+    btn.addEventListener("click", async () => {
+      const ok = await copyToClipboard(
+        pre.querySelector("code")?.textContent || "",
+      );
+      if (ok) {
+        flashCopied(btn);
+      }
     });
     pre.appendChild(btn);
   });

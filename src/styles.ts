@@ -4,7 +4,6 @@ export const CSS_VARIABLES = `
     color-scheme: dark;
 
     --bg: #050505;
-    --bg-radial: #0c0b10;
     --surface: #0c0b10;
     --surface-hi: #14141b;
     --header-bg: rgba(10, 10, 14, 0.82);
@@ -15,7 +14,6 @@ export const CSS_VARIABLES = `
     --text: #f5f3ee;
     --text-muted: #a8a49a;
     --text-dim: #7d7a72;
-    --text-accent: #d29922;
     --text-sub-accent: #d29922;
 
     /* Semantic accents for Obsidian */
@@ -40,7 +38,6 @@ export const CSS_VARIABLES = `
     --modal-bg: #0c0b10;
     --modal-input-bg: #14141b;
     --modal-shadow: rgba(0, 0, 0, 0.65);
-    --brand-text: #f5f3ee;
 
     /* Syntax highlighting tokens */
     --sh-keyword: #ff79c6;
@@ -63,7 +60,7 @@ export const CSS_VARIABLES = `
 
 // Common resets, background gradient, header/footer chrome, buttons and badges
 export const BASE_CSS = `
-  * { box-sizing: border-box; margin: 0; padding: 0; }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   html {
     min-height: 100%;
@@ -232,9 +229,13 @@ export const BASE_CSS = `
      40px+ comfort zone for thumbs — bump the hit area without changing the
      visual glyph size. Header min-height (48px) still fits. */
   @media (pointer: coarse) {
-    .btn-action { width: 40px; height: 40px; }
+    .btn-action,
+    .util-strip .btn-action,
+    .px-modal-close {
+      width: 40px;
+      height: 40px;
+    }
     .seg-option .badge { min-height: 40px; }
-    .px-modal-close { width: 40px; height: 40px; }
   }
 
   .brand {
@@ -291,10 +292,12 @@ export const BASE_CSS = `
   }
 
   .btn-action.copied,
+  .btn-save.copied,
   .code-copy-btn.copied {
-    color: var(--green);
-    background: var(--green-fill);
-    border-color: var(--green-line);
+    color: var(--green) !important;
+    background: var(--green-fill) !important;
+    border-color: var(--green-line) !important;
+    box-shadow: none !important;
   }
 
   /* Primary action — flat amber pill. No gradient or glow: the bar is glass,
@@ -635,7 +638,7 @@ export const LANDING_CSS = `
     width: 100%;
     max-width: 76rem;
     margin: 0.85rem auto 0;
-    padding: 0 1rem;
+    padding: 0 1.2rem;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -664,10 +667,13 @@ export const LANDING_CSS = `
      E2EE is chosen, which earns the amber. */
   .mode-seg {
     position: relative;
-    display: flex;
+    display: inline-flex;
+    align-items: center;
+    padding: 3px;
     border: 1px solid var(--border);
     border-radius: 999px;
     flex-shrink: 0;
+    user-select: none;
   }
 
   .mode-seg::before {
@@ -680,6 +686,7 @@ export const LANDING_CSS = `
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.09);
     border: 1px solid var(--border-hover);
+    box-sizing: border-box;
     transition: transform 0.25s cubic-bezier(0.32, 0.72, 0, 1);
   }
 
@@ -688,10 +695,11 @@ export const LANDING_CSS = `
   .seg-option {
     position: relative;
     z-index: 1;
-    flex: 1;
+    flex: 1 1 0;
+    min-width: 96px;
     display: flex;
-    min-width: 0;
-    overflow: hidden;
+    align-items: center;
+    justify-content: center;
     cursor: pointer;
   }
 
@@ -710,7 +718,8 @@ export const LANDING_CSS = `
     border-radius: 0;
     width: 100%;
     justify-content: center;
-    min-height: 40px;
+    min-height: 34px;
+    padding: 0 0.75rem;
     opacity: 0.45;
     transition: opacity 0.2s ease, color 0.2s ease;
   }
@@ -734,7 +743,8 @@ export const LANDING_CSS = `
   @media (max-width: 520px) {
     .seg-full { display: none; }
     .seg-short { display: inline; }
-    .seg-option .badge { padding-left: 0.4rem; padding-right: 0.4rem; }
+    .seg-option { min-width: 72px; }
+    .seg-option .badge { padding: 0 0.5rem; }
     .btn-save { padding: 0 1rem; }
   }
 
@@ -744,7 +754,6 @@ export const LANDING_CSS = `
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
-    height: var(--control-h);
     min-height: 40px;
     background-color: transparent;
     border: 1px solid var(--border);
@@ -1020,12 +1029,6 @@ export const LANDING_CSS = `
     flex-wrap: wrap;
   }
 
-  .badge-ttl {
-    background: var(--blue-fill);
-    border-color: var(--blue-line);
-    color: var(--blue);
-  }
-
   .px-modal-link-box {
     display: flex;
     align-items: center;
@@ -1119,6 +1122,7 @@ export const LANDING_CSS = `
     padding: 0 0.95rem;
     font-size: 0.82rem;
     font-weight: 500;
+    border-radius: var(--radius-sm);
     width: auto;
   }
 
@@ -1131,15 +1135,6 @@ export const LANDING_CSS = `
   .px-modal-done:hover {
     background: var(--border-hover);
     color: var(--text);
-  }
-
-  /* Success flash animation when copied */
-  .btn-save.copied,
-  .btn-action.copied {
-    background: var(--green-fill) !important;
-    color: var(--green) !important;
-    border-color: var(--green-line) !important;
-    box-shadow: none !important;
   }
 
   .draft-badge {
@@ -1190,6 +1185,10 @@ export const LANDING_CSS = `
   }
 
   @media (max-width: 640px) {
+    .util-strip {
+      width: calc(100% - 1rem);
+      padding: 0 0.9rem;
+    }
     .editor-container.split-active textarea {
       display: none !important;
     }
@@ -1241,6 +1240,13 @@ export const LANDING_CSS = `
 
 // Viewer page layout and the E2EE unlock card
 export const VIEWER_CSS = `
+  .viewer-container ~ .footer-bar,
+  body:has(.viewer-container) .footer-bar {
+    position: relative;
+    bottom: auto;
+    margin-top: auto;
+  }
+
   .btn-delete {
     display: inline-flex;
     align-items: center;
@@ -1304,12 +1310,6 @@ export const VIEWER_CSS = `
   .viewer-msg {
     color: var(--text-muted);
     font-style: italic;
-  }
-
-  .viewer-msg.is-error {
-    color: var(--red);
-    font-style: normal;
-    font-weight: 600;
   }
 
   .unlock-card-wrapper {

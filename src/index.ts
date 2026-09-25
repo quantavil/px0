@@ -278,7 +278,7 @@ app.get("/", (c) => {
               <div class="mode-seg" role="group" aria-label="Paste mode">
                 <label class="seg-option" title="Store as-is — anyone with the link can read it">
                   <input type="radio" name="mode" id="modePlaintext" checked>
-                  <span class="badge badge-public" id="modePlaintextLabel">${raw(globeSvg)}<span class="seg-full">Plaintext</span><span class="seg-short">Plain</span></span>
+                  <span class="badge badge-public" id="modePlaintextLabel">${raw(globeSvg)}<span class="seg-full">Plaintext</span><span class="seg-short" aria-hidden="true">Plain</span></span>
                 </label>
                 <label class="seg-option" title="Zero-knowledge encrypted: the key never leaves your browser">
                   <input type="radio" name="mode" id="e2eeToggle">
@@ -483,7 +483,6 @@ app.get("/:id", async (c) => {
             <h1 class="not-found-title">Paste Unavailable</h1>
             <p class="not-found-subtitle">This paste has expired, self-destructed after reading, or never existed.</p>
           </main>
-          <script src="/static/viewer.js" defer></script>
         </body>
         </html>
       `,

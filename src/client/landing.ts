@@ -537,6 +537,8 @@ function initLanding() {
         const ttlLabel = ttlValue?.textContent?.trim() || "1 Day";
 
         showSuccessModal(pasteUrl, selectedTtl === "burn", modeType, ttlLabel);
+      } else {
+        fail("Invalid server response: missing paste ID.");
       }
     });
   }
@@ -551,12 +553,19 @@ function escapeHtmlAttr(s: string): string {
     .replace(/>/g, "&gt;");
 }
 
+let activeModalClose: (() => void) | null = null;
+
 function showSuccessModal(
   url: string,
   isBurn: boolean,
   mode: "e2ee" | "plaintext",
   ttlLabel: string,
 ) {
+  if (activeModalClose) {
+    activeModalClose();
+  }
+  const previousActiveElement = document.activeElement as HTMLElement | null;
+
   const fullUrl = window.location.origin + url;
   const escUrl = escapeHtmlAttr(fullUrl);
   const escTtl = escapeHtmlAttr(ttlLabel);
@@ -660,10 +669,20 @@ function showSuccessModal(
   };
 
   const closeModal = () => {
+    activeModalClose = null;
     document.removeEventListener("keydown", handleKeydown);
     overlay.classList.add("closing");
-    setTimeout(() => overlay.remove(), 160);
+    setTimeout(() => {
+      overlay.remove();
+      if (
+        previousActiveElement &&
+        typeof previousActiveElement.focus === "function"
+      ) {
+        previousActiveElement.focus();
+      }
+    }, 160);
   };
+  activeModalClose = closeModal;
 
   const performCopy = async () => {
     urlInput?.focus();
