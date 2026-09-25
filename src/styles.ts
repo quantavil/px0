@@ -248,7 +248,8 @@ export const BASE_CSS = `
 
   .brand:hover { opacity: 0.85; }
 
-  /* Icon button — one size, one behaviour, everywhere. */
+  /* Icon button — circular ghost, one behaviour everywhere. Round because it
+     lives inside pill bars; square buttons clashed with the round chrome. */
   .btn-action {
     display: inline-flex;
     align-items: center;
@@ -256,10 +257,10 @@ export const BASE_CSS = `
     width: var(--control-h);
     height: var(--control-h);
     padding: 0;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid var(--border);
-    color: var(--text-muted);
-    border-radius: var(--radius);
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text-dim);
+    border-radius: 50%;
     cursor: pointer;
     text-decoration: none;
     transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
@@ -269,11 +270,10 @@ export const BASE_CSS = `
   .btn-action:hover {
     color: var(--amber);
     background: var(--amber-fill);
-    border-color: var(--amber-line);
-    transform: translateY(-1px);
+    border-color: transparent;
   }
 
-  .btn-action:active { transform: translateY(0) scale(0.96); }
+  .btn-action:active { transform: scale(0.94); }
 
   .btn-action svg {
     width: 15px;
@@ -297,32 +297,28 @@ export const BASE_CSS = `
     border-color: var(--green-line);
   }
 
-  /* Primary action button */
+  /* Primary action — flat amber pill. No gradient or glow: the bar is glass,
+     the button is the single solid object in it. */
   .btn-save {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 0.45rem;
-    height: var(--control-h);
-    background: linear-gradient(180deg, #d29922 0%, #b88219 100%);
-    color: #0d1117;
-    font-weight: 600;
-    font-size: 0.82rem;
-    padding: 0 0.95rem;
+    min-height: 44px;
+    background: var(--amber);
+    color: #14100a;
+    font-weight: 700;
+    font-size: 0.85rem;
+    padding: 0 1.25rem;
     border: none;
-    border-radius: var(--radius);
+    border-radius: 999px;
     cursor: pointer;
-    box-shadow: 0 2px 10px rgba(210, 153, 34, 0.25);
-    transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+    transition: filter 0.15s ease, transform 0.15s ease;
   }
 
-  .btn-save:hover:not(:disabled) {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 14px rgba(210, 153, 34, 0.4);
-    filter: brightness(1.05);
-  }
+  .btn-save:hover:not(:disabled) { filter: brightness(1.1); }
 
-  .btn-save:active:not(:disabled) { transform: translateY(0); }
+  .btn-save:active:not(:disabled) { transform: scale(0.97); }
 
   .btn-save:disabled {
     opacity: 0.5;
@@ -632,17 +628,41 @@ export const MARKDOWN_CSS = `
 export const LANDING_CSS = `
   body { overflow: hidden; }
 
-  /* Plaintext/E2EE segmented control. Two radios, one name — the browser
-     keeps them mutually exclusive, so no JS state can disagree. */
+  /* Plaintext/E2EE segmented control with a sliding thumb. Two radios, one
+     name — the browser keeps them mutually exclusive, and the :checked
+     styles show the choice, so no JS label sync is needed. Unselected side
+     stays a dim ghost; only the thumb side lights up. Monochrome until
+     E2EE is chosen, which earns the amber. */
   .mode-seg {
+    position: relative;
     display: flex;
     border: 1px solid var(--border);
     border-radius: 999px;
-    overflow: hidden;
     flex-shrink: 0;
   }
 
-  .seg-option { cursor: pointer; }
+  .mode-seg::before {
+    content: "";
+    position: absolute;
+    top: 3px;
+    bottom: 3px;
+    left: 3px;
+    width: calc(50% - 3px);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.09);
+    border: 1px solid var(--border-hover);
+    transition: transform 0.25s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+
+  .mode-seg:has(#e2eeToggle:checked)::before { transform: translateX(100%); }
+
+  .seg-option {
+    position: relative;
+    z-index: 1;
+    flex: 1;
+    display: flex;
+    cursor: pointer;
+  }
 
   /* 1px rather than 0 — a zero-sized control drops out of the accessibility
      tree in Chrome, hiding the mode switch from screen readers. */
@@ -654,15 +674,26 @@ export const LANDING_CSS = `
   }
 
   .seg-option .badge {
+    background: transparent;
     border: 0;
     border-radius: 0;
-    opacity: 0.55;
-    transition: opacity 0.2s ease, background 0.2s ease;
+    width: 100%;
+    justify-content: center;
+    min-height: 40px;
+    opacity: 0.45;
+    transition: opacity 0.2s ease, color 0.2s ease;
   }
 
-  .seg-option input:checked + .badge { opacity: 1; }
-  .seg-option input:checked + .badge-public { background: var(--blue-fill); }
-  .seg-option input:checked + .badge-encrypted { background: var(--green-fill); }
+  .mode-seg:has(#modePlaintext:checked) .seg-option:first-child .badge {
+    opacity: 1;
+    color: var(--text);
+  }
+
+  .mode-seg:has(#e2eeToggle:checked) .seg-option:last-child .badge {
+    opacity: 1;
+    color: var(--amber);
+  }
+
   .seg-option input:focus-visible + .badge { outline: 2px solid var(--amber); outline-offset: -2px; }
 
   .ttl-dropdown { position: relative; }
@@ -672,24 +703,26 @@ export const LANDING_CSS = `
     align-items: center;
     gap: 0.4rem;
     height: var(--control-h);
-    background-color: var(--surface);
-    border: 1px solid var(--amber-line);
-    color: var(--amber);
+    min-height: 40px;
+    background-color: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
     font-family: var(--mono);
     font-size: 0.75rem;
-    padding: 0 0.65rem;
-    border-radius: 7px;
+    padding: 0 0.8rem;
+    border-radius: 999px;
     cursor: pointer;
     white-space: nowrap;
-    transition: background-color 0.2s ease, border-color 0.2s ease;
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
   }
 
   .ttl-trigger svg { transition: transform 0.2s ease; }
   .ttl-trigger.open svg { transform: rotate(180deg); }
 
   .ttl-trigger:hover, .ttl-trigger.open {
-    background-color: var(--surface-hi);
-    border-color: rgba(210, 153, 34, 0.6);
+    background-color: var(--amber-fill);
+    border-color: var(--amber-line);
+    color: var(--amber);
   }
 
   .ttl-menu {
@@ -1163,8 +1196,23 @@ export const LANDING_CSS = `
     }
 
     .footer-bar { row-gap: 0.6rem; }
-    .footer-left { width: 100%; }
-    #saveBtn { width: 100%; }
+
+    /* Two-row footer: seg + Save on row one, TTL + split + inline counter
+       on row two. display:contents dissolves the two wrapper divs so each
+       control orders individually; the counter never gets its own row. */
+    .footer-left, .footer-right { display: contents; }
+    .mode-seg { order: 1; flex: 1 1 auto; }
+    #saveBtn { order: 2; flex: 0 0 auto; }
+    .ttl-dropdown { order: 3; }
+    #btnSplit { order: 4; }
+    #charCount {
+      order: 5;
+      flex: 1 1 auto;
+      text-align: right;
+      font-size: 0.7rem;
+    }
+    #draftContainer, #saveError { order: 6; flex-basis: 100%; }
+    #draftContainer:empty { display: none; }
   }
 `;
 
@@ -1174,21 +1222,20 @@ export const VIEWER_CSS = `
     display: inline-flex;
     align-items: center;
     gap: 0.45rem;
-    height: var(--control-h);
-    background: var(--red-fill);
+    min-height: 40px;
+    background: transparent;
     color: var(--red);
     font-weight: 600;
     font-size: 0.82rem;
-    padding: 0 0.95rem;
+    padding: 0 1rem;
     border: 1px solid var(--red-line);
-    border-radius: var(--radius);
+    border-radius: 999px;
     cursor: pointer;
-    transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+    transition: background 0.15s ease, transform 0.15s ease;
   }
 
   .btn-delete:hover {
-    background: rgba(248, 81, 73, 0.2);
-    border-color: rgba(248, 81, 73, 0.6);
+    background: var(--red-fill);
   }
 
   .btn-delete:active { transform: scale(0.97); }
@@ -1310,19 +1357,19 @@ export const VIEWER_CSS = `
   .unlock-input:focus { border-color: var(--amber); }
 
   .btn-unlock-submit {
-    background: linear-gradient(180deg, #d29922 0%, #b88219 100%);
+    background: var(--amber);
     border: none;
-    color: #0d1117;
-    font-weight: 600;
+    color: #14100a;
+    font-weight: 700;
     font-size: 0.88rem;
-    padding: 0.6rem 1.2rem;
-    border-radius: var(--radius);
+    padding: 0.7rem 1.2rem;
+    border-radius: 999px;
     cursor: pointer;
     transition: filter 0.2s ease, transform 0.2s ease;
   }
 
-  .btn-unlock-submit:hover { filter: brightness(1.06); transform: translateY(-1px); }
-  .btn-unlock-submit:active { transform: translateY(0); }
+  .btn-unlock-submit:hover { filter: brightness(1.1); }
+  .btn-unlock-submit:active { transform: scale(0.97); }
   .btn-unlock-submit:disabled { opacity: 0.5; cursor: progress; filter: none; transform: none; }
 
   .unlock-err-msg {

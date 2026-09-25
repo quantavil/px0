@@ -10,12 +10,12 @@ test.describe('px0 E2E Browser Test Suite', () => {
     // Plaintext is the default mode; E2EE is opt-in via the footer seg.
     await expect(page.locator('#modePlaintext')).toBeChecked();
     await expect(page.locator('#toggleLabel')).toContainText('E2EE');
-    await expect(page.locator('#charCount')).toContainText('›_ 0 lines (0 B / 5MB)');
+    await expect(page.locator('#charCount')).toContainText('0 lines · 0 B');
 
     const textarea = page.locator('#content');
     await textarea.fill('Line 1\nLine 2\nLine 3');
 
-    await expect(page.locator('#charCount')).toContainText('›_ 3 lines');
+    await expect(page.locator('#charCount')).toContainText('3 lines');
 
     // Test Tab key handling in textarea
     await textarea.focus();

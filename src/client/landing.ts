@@ -213,7 +213,10 @@ function initLanding() {
     const val = textarea.value || "";
     const lines = val ? val.split("\n").length : 0;
     const byteCount = new TextEncoder().encode(val).byteLength;
-    charCount.textContent = `›_ ${lines} lines (${formatBytes(byteCount)} / 5MB)`;
+    // Compact by design: the footer has no room for a full sentence on a
+    // 390px phone. Full accounting lives in the tooltip.
+    charCount.textContent = `${lines} lines · ${formatBytes(byteCount)}`;
+    charCount.title = `${lines} lines (${formatBytes(byteCount)} / 5MB)`;
 
     if (editorContainer?.classList.contains("split-active")) {
       scheduleLivePreview();

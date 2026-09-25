@@ -291,7 +291,7 @@ app.get("/", (c) => {
               <button type="button" id="btnSplit" class="btn-action" title="Toggle Split Live Preview" aria-label="Toggle Split Live Preview" aria-pressed="false">
                 ${raw(splitIcon)}
               </button>
-              <span id="charCount" class="stats-label">›_ 0 lines (0 B / 5MB)</span>
+              <span id="charCount" class="stats-label" title="0 lines (0 B / 5MB)">0 lines · 0 B</span>
               <span id="draftContainer"></span>
               <span id="saveError" class="save-error" role="alert"></span>
             </div>
