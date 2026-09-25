@@ -885,6 +885,12 @@ export const LANDING_CSS = `
 
   textarea::placeholder { color: var(--text-dim); }
 
+  /* The editor is the primary surface and is auto-focused on load. The
+     global :focus-visible outline drew a stray amber box around its
+     content-height box (only the bottom edge visible, full-width). The
+     blinking caret is the focus indicator here, as in any code editor. */
+  textarea:focus { outline: none; }
+
   .preview-pane {
     display: none;
     height: 100%;
