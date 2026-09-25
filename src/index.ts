@@ -57,6 +57,19 @@ export function setInMemoryPaste(
   deleteToken?: string,
 ) {
   const expiresAt = ttlSeconds ? Date.now() + ttlSeconds * 1000 : undefined;
+  // Dev/e2e/test fallback has no KV TTL sweep — cap it so never-read keys
+  // can't grow without bound until restart.
+  if (inMemoryPastes.size > 2000) {
+    const now = Date.now();
+    for (const [key, entry] of inMemoryPastes.entries()) {
+      if (entry.expiresAt && now > entry.expiresAt) inMemoryPastes.delete(key);
+      if (inMemoryPastes.size <= 1500) break;
+    }
+    if (inMemoryPastes.size > 2000) {
+      const oldest = inMemoryPastes.keys().next();
+      if (!oldest.done) inMemoryPastes.delete(oldest.value);
+    }
+  }
   inMemoryPastes.set(id, { payload, expiresAt, deleteToken });
 }
 
@@ -176,8 +189,18 @@ app.use("*", async (c, next) => {
   if (c.req.path !== "/") c.header("X-Robots-Tag", "noindex, nofollow");
   c.header(
     "Content-Security-Policy",
-    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none';",
+    "default-src 'self'; script-src 'self' 'sha256-XjkRHMxOVpWt8fSou2GUS6QHAUDcdUwF9hYLYnMh9cw='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none';",
   );
+});
+
+// Graceful 500s instead of unhandled throws on KV/network blips.
+app.onError((err, c) => {
+  console.error("px0 unhandled error:", err);
+  const accept = c.req.header("accept") || "";
+  if (accept.includes("application/json") || c.req.path.startsWith("/api/")) {
+    return c.json({ error: "Internal server error" }, 500);
+  }
+  return c.text("Internal server error", 500);
 });
 
 // Favicon Route (SVG Bolt Icon)
@@ -209,7 +232,7 @@ app.get("/", (c) => {
       <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <meta name="theme-color" content="#161b22">
+        <meta name="theme-color" id="themeColor" content="#161b22">
         <meta name="description" content="Minimalist markdown pastebin with zero-knowledge encryption, password protection and burn-after-read.">
         <title>px0 - Minimalist Markdown Pastebin</title>
         <link rel="icon" type="image/svg+xml" href="/favicon.ico">
@@ -222,6 +245,7 @@ app.get("/", (c) => {
         </style>
       </head>
       <body>
+        <h1 class="sr-only">px0 — minimalist markdown pastebin</h1>
         <form id="pasteForm">
           <header>
             <a href="/" class="brand" title="px0">
@@ -267,7 +291,7 @@ app.get("/", (c) => {
           </header>
 
           <div id="editorContainer" class="editor-container">
-            <textarea id="content" aria-label="Paste content" placeholder="Go ahead, type something…&#10;(you can paste markdown or code here)" autofocus></textarea>
+            <textarea id="content" aria-label="Paste content" placeholder="Go ahead, type something…&#10;(you can paste markdown or code here)"></textarea>
             <div id="previewPane" class="preview-pane"></div>
           </div>
 
@@ -314,8 +338,11 @@ app.post("/api/paste", async (c) => {
 
   // The browser posts JSON; a terminal posts the file. Requiring JSON meant
   // `curl` users had to hand-escape newlines and quotes out of the very
-  // markdown they were pasting.
-  const isJson = c.req.header("content-type")?.includes("application/json");
+  // markdown they were pasting. Parse the media type exactly so lookalikes
+  // like `application/json-patch+json` don't take the JSON path.
+  const rawContentType =
+    c.req.header("content-type")?.split(";")[0]?.trim().toLowerCase() ?? "";
+  const isJson = rawContentType === "application/json";
 
   let content: unknown;
   let ttl: unknown;
@@ -341,7 +368,16 @@ app.post("/api/paste", async (c) => {
     return c.json({ error: "Paste size exceeds 5MB limit" }, 413);
   }
 
-  const id = generateShortId(8);
+  // 8-char 64-alphabet IDs give 48 bits of entropy; still, never silently
+  // overwrite an existing key and orphan its deleteToken. Retry on collision.
+  let id = generateShortId(8);
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (!(await readPaste(id, c.env))) break;
+    id = generateShortId(8);
+  }
+  if (await readPaste(id, c.env)) {
+    return c.json({ error: "ID collision, please retry" }, 503);
+  }
   const deleteToken = generateShortId(16);
   const selectedTtl = typeof ttl === "string" ? ttl : "30d";
   if (selectedTtl !== "burn" && !TTL_MAP[selectedTtl]) {
@@ -376,7 +412,9 @@ app.post("/api/paste", async (c) => {
 // 3. Delete Paste API (instant, regardless of TTL)
 app.delete("/api/paste/:id", async (c) => {
   // Same budget as creation: knowing an id is the only credential here, so an
-  // unthrottled delete endpoint is a free id-guessing loop.
+  // unthrottled delete endpoint is a free id-guessing loop. Note: this map is
+  // per-isolate Worker memory, so it blunts single-edge abuse rather than
+  // providing a global throttle.
   if (isRateLimited(c.req.header("cf-connecting-ip") || "127.0.0.1")) {
     return c.json(
       { error: "Rate limit exceeded. Please try again later." },
@@ -384,16 +422,22 @@ app.delete("/api/paste/:id", async (c) => {
     );
   }
   const id = c.req.param("id");
+  if (!/^[A-Za-z0-9-_]{1,64}$/.test(id)) {
+    return c.json({ error: "Paste not found" }, 404);
+  }
+  // Prefer the header (query strings persist in history/edge logs); the query
+  // param remains for backwards compatibility.
   const providedToken =
-    c.req.query("token") || c.req.header("x-delete-token") || "";
+    c.req.header("x-delete-token") || c.req.query("token") || "";
 
   const record = await readPaste(id, c.env);
   if (!record) {
     return c.json({ error: "Paste not found" }, 404);
   }
 
-  // Require matching deleteToken if one was issued for this paste
-  if (record.deleteToken && record.deleteToken !== providedToken) {
+  // Fail closed: a record without a stored token can never be deleted by
+  // token, otherwise legacy/token-less rows would be deletable by anyone.
+  if (!record.deleteToken || record.deleteToken !== providedToken) {
     return c.json({ error: "Unauthorized: Invalid delete token" }, 401);
   }
 
@@ -408,6 +452,9 @@ app.delete("/api/paste/:id", async (c) => {
 // 4. Render View Route
 app.get("/:id", async (c) => {
   const id = c.req.param("id");
+  if (!/^[A-Za-z0-9-_]{1,64}$/.test(id)) {
+    return c.text("Paste Expired or Not Found", 404);
+  }
   const record = await readPaste(id, c.env);
   let rawContent: string | null = record?.value ?? null;
   let expiresAtMs = record?.expiresAtMs;
@@ -420,7 +467,7 @@ app.get("/:id", async (c) => {
         <head>
           <meta charset="UTF-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <meta name="theme-color" content="#161b22">
+          <meta name="theme-color" id="themeColor" content="#161b22">
           <title>404 - Paste Unavailable | px0</title>
           <link rel="icon" type="image/svg+xml" href="/favicon.ico">
           ${raw(THEME_BOOTSTRAP_SCRIPT)}
@@ -454,9 +501,13 @@ app.get("/:id", async (c) => {
   // Check and handle Burn After Read self-destruction with bot/prefetch protection
   const isBurnAfterRead = rawContent.startsWith(BURN_PREFIX);
   const isConfirmed = c.req.query("confirm") === "1";
+  // Real-world values can be combined (`prefetch;prerender`), so substring-match.
+  const purpose = c.req.header("purpose") || "";
+  const secPurpose = c.req.header("sec-purpose") || "";
   const isPrefetch =
-    c.req.header("purpose") === "prefetch" ||
-    c.req.header("sec-purpose") === "prefetch";
+    purpose.toLowerCase().includes("prefetch") ||
+    secPurpose.toLowerCase().includes("prefetch") ||
+    secPurpose.toLowerCase().includes("prerender");
 
   if (isBurnAfterRead && (!isConfirmed || isPrefetch)) {
     return c.html(
@@ -466,7 +517,7 @@ app.get("/:id", async (c) => {
         <head>
           <meta charset="UTF-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <meta name="theme-color" content="#161b22">
+          <meta name="theme-color" id="themeColor" content="#161b22">
           <title>Burn-After-Read Paste | px0</title>
           <link rel="icon" type="image/svg+xml" href="/favicon.ico">
           ${raw(THEME_BOOTSTRAP_SCRIPT)}
@@ -505,6 +556,8 @@ app.get("/:id", async (c) => {
   if (isBurnAfterRead) {
     rawContent = rawContent.slice(BURN_PREFIX.length);
     expiresAtMs = undefined; // burn-after-read pastes self-destruct on view; no countdown
+    // Fail closed: if the delete throws, 500 via onError without rendering the
+    // content below — never show a paste we failed to burn.
     if (c.env?.PASTES_KV) {
       await c.env.PASTES_KV.delete(id);
     } else {
@@ -537,6 +590,8 @@ app.get("/:id", async (c) => {
       <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="theme-color" id="themeColor" content="#161b22">
+        <meta name="description" content="Minimalist markdown pastebin with zero-knowledge encryption, password protection and burn-after-read.">
         <title>Paste ${id} - px0</title>
         <link rel="icon" type="image/svg+xml" href="/favicon.ico">
         ${raw(THEME_BOOTSTRAP_SCRIPT)}
@@ -607,9 +662,9 @@ app.get("/:id", async (c) => {
       </html>
     `,
     200,
-    // The one response in the app that must never be re-served: a burn paste is
-    // deleted by this very request, so any cache holding onto the HTML would
-    // hand out content that no longer exists in storage.
+    // Every view/raw response is private and unlisted: never let an edge cache
+    // re-serve one. For burn pastes this is load-bearing (the paste is deleted
+    // by this very request); for the rest it keeps unlisted links private.
     { "Cache-Control": "no-store" },
   );
 });
@@ -617,6 +672,9 @@ app.get("/:id", async (c) => {
 // 4. View Raw Route
 app.get("/raw/:id", async (c) => {
   const id = c.req.param("id");
+  if (!/^[A-Za-z0-9-_]{1,64}$/.test(id)) {
+    return c.text("Paste Expired or Not Found", 404);
+  }
   const record = await readPaste(id, c.env);
   let rawContent: string | null = record?.value ?? null;
 

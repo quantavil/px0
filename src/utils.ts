@@ -23,6 +23,7 @@ export const TTL_MAP: Record<string, number> = {
 };
 
 export function getTtlSeconds(ttlKey?: string): number {
+  if (ttlKey === "burn") return 86400;
   if (ttlKey && TTL_MAP[ttlKey]) {
     return TTL_MAP[ttlKey];
   }

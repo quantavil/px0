@@ -3,7 +3,7 @@ import { highlight } from "sugar-high";
 import { moonIcon, sunIcon } from "../icons";
 import { decodeBase64Url, sanitizeHtml } from "../utils";
 
-export { bytesToBase64, bytesToBase64Url, decodeBase64Url } from "../utils";
+export { bytesToBase64Url } from "../utils";
 
 export function initThemeToggle() {
   const btn = document.getElementById(
@@ -27,6 +27,14 @@ export function initThemeToggle() {
     button.title =
       theme === "dark" ? "Switch to Light Theme" : "Switch to Dark Theme";
     button.setAttribute("aria-label", button.title);
+    // Keep the browser chrome in sync — the SSR meta defaults to dark.
+    const themeMeta = document.getElementById("themeColor");
+    if (themeMeta) {
+      themeMeta.setAttribute(
+        "content",
+        theme === "dark" ? "#161b22" : "#f8f6f0",
+      );
+    }
   }
 
   const current = getEffectiveTheme();
@@ -61,6 +69,16 @@ export function formatTimeLeft(ms: number): string {
 
 // Post-parsing HTML sanitizer: strips inline event handlers and dangerous URIs
 // from rendered output. Defence in depth alongside the CSP.
+// WHATWG URL parsing strips leading C0 controls + space before scheme checks,
+// so `javascript:` with a control-char prefix would otherwise bypass the
+// startsWith tests below. No regex literal can express that range under the
+// linter, so compare char codes instead.
+function stripLeadingC0(s: string): string {
+  let i = 0;
+  while (i < s.length && s.charCodeAt(i) <= 32) i++;
+  return s.slice(i);
+}
+
 export function sanitizeOutputHtml(htmlStr: string): string {
   if (typeof DOMParser !== "undefined") {
     const parser = new DOMParser();
@@ -69,22 +87,42 @@ export function sanitizeOutputHtml(htmlStr: string): string {
     for (const el of Array.from(elements)) {
       const tag = el.tagName.toLowerCase();
       if (
-        ["script", "iframe", "object", "embed", "style", "form"].includes(tag)
+        [
+          "script",
+          "iframe",
+          "object",
+          "embed",
+          "style",
+          "form",
+          "link",
+          "meta",
+          "base",
+          "frame",
+          "frameset",
+          "applet",
+        ].includes(tag)
       ) {
         el.remove();
         continue;
       }
       for (const attr of Array.from(el.attributes)) {
         const name = attr.name.toLowerCase();
-        const val = attr.value.trim().toLowerCase();
+        const val = stripLeadingC0(attr.value).trim().toLowerCase();
         if (name.startsWith("on")) {
+          el.removeAttribute(attr.name);
+        } else if (name === "style") {
+          // Inline CSS enables exfiltration via url() and legacy expression().
           el.removeAttribute(attr.name);
         } else if (
           (name === "href" ||
             name === "src" ||
             name === "xlink:href" ||
             name === "formaction" ||
-            name === "srcset") &&
+            name === "srcset" ||
+            name === "poster" ||
+            name === "background" ||
+            name === "srcdoc" ||
+            name === "lowsrc") &&
           (val.startsWith("javascript:") ||
             val.startsWith("vbscript:") ||
             val.startsWith("data:"))
@@ -100,26 +138,31 @@ export function sanitizeOutputHtml(htmlStr: string): string {
     htmlStr
       // Strip dangerous tags completely
       .replace(
-        /<\s*(script|iframe|object|embed|style|form)\b[\s\S]*?<\s*\/\s*\1\s*>/gi,
+        /<\s*(script|iframe|object|embed|style|form|link|meta|base|frame|frameset|applet)\b[\s\S]*?<\s*\/\s*\1\s*>/gi,
         "",
       )
-      .replace(/<\s*(script|iframe|object|embed|style|form)\b[^>]*\/?>/gi, "")
-      // Strip event handlers
+      .replace(
+        /<\s*(script|iframe|object|embed|style|form|link|meta|base|frame|frameset|applet)\b[^>]*\/?>/gi,
+        "",
+      )
+      // Strip event handlers and inline style (regex fallback mirrors the DOM branch)
       .replace(/[\s/]+on[a-z0-9_-]+\s*=\s*(?:'[^']*'|"[^"]*"|[^\s>]+)/gi, "")
+      .replace(/[\s/]+style\s*=\s*(?:'[^']*'|"[^"]*"|[^\s>]+)/gi, "")
       // Strip dangerous URIs by decoding entity representations and inspecting scheme
       .replace(
-        /(href|src|xlink:href|formaction|srcset)\s*=\s*(?:'([^']*)'|"([^"]*)"|([^\s>]+))/gi,
+        /(href|src|xlink:href|formaction|srcset|poster|background|srcdoc|lowsrc)\s*=\s*(?:'([^']*)'|"([^"]*)"|([^\s>]+))/gi,
         (match, attrName, valSingle, valDouble, valBare) => {
           const rawVal = valSingle ?? valDouble ?? valBare ?? "";
-          const decoded = rawVal
-            .replace(/&#x([0-9a-f]+);?/gi, (_: string, hex: string) =>
-              String.fromCharCode(parseInt(hex, 16)),
-            )
-            .replace(/&#([0-9]+);?/g, (_: string, dec: string) =>
-              String.fromCharCode(parseInt(dec, 10)),
-            )
-            .replace(/\s+/g, "")
-            .toLowerCase();
+          const decoded = stripLeadingC0(
+            rawVal
+              .replace(/&#x([0-9a-f]+);?/gi, (_: string, hex: string) =>
+                String.fromCharCode(parseInt(hex, 16)),
+              )
+              .replace(/&#([0-9]+);?/g, (_: string, dec: string) =>
+                String.fromCharCode(parseInt(dec, 10)),
+              )
+              .replace(/\s+/g, ""),
+          ).toLowerCase();
           if (
             decoded.startsWith("javascript:") ||
             decoded.startsWith("vbscript:") ||
@@ -142,7 +185,7 @@ marked.use({
   renderer: {
     link({ href, title, text }) {
       const cleanHref = href ? href.trim() : "";
-      const lower = cleanHref.toLowerCase();
+      const lower = stripLeadingC0(cleanHref).toLowerCase();
       if (
         lower.startsWith("javascript:") ||
         lower.startsWith("vbscript:") ||

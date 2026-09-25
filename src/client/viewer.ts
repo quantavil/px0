@@ -55,7 +55,10 @@ function startExpiryCountdown() {
 
   const update = () => {
     const remaining = expiresAtMs - Date.now();
-    badge.innerHTML = `${clockSvg} ${formatTimeLeft(remaining)}`;
+    // formatTimeLeft can return "<1m left" — setting it via innerHTML would
+    // parse the "<" as markup. Set text first, then prepend the static icon.
+    badge.textContent = formatTimeLeft(remaining);
+    badge.insertAdjacentHTML("afterbegin", `${clockSvg} `);
     if (remaining > 0) return;
     // The countdown used to just stop, leaving an amber "expired" badge over
     // content that a reload would 404. The text stays on screen — it is already
@@ -103,9 +106,9 @@ function pasteText(): string {
   return encrypted ? "" : rawVal;
 }
 
-function copyContent() {
-  copyToClipboard(pasteText());
-  flashCopied(document.getElementById("copyContentBtn"));
+async function copyContent() {
+  const ok = await copyToClipboard(pasteText());
+  if (ok) flashCopied(document.getElementById("copyContentBtn"));
 }
 
 // Download, not /raw: this works for decrypted E2EE and password pastes, which
@@ -119,8 +122,12 @@ function downloadContent() {
   const a = document.createElement("a");
   a.href = url;
   a.download = `${window.location.pathname.slice(1) || "paste"}.md`;
+  // Firefox requires the anchor to be in the DOM; revoking synchronously can
+  // race the download start, so defer it.
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
   flashCopied(document.getElementById("downloadBtn"));
 }
 
@@ -201,7 +208,8 @@ async function unlockPasswordPaste() {
     attachCodeBlockCopyButtons();
   } catch (_err) {
     if (passErr)
-      passErr.textContent = "Incorrect password — check it and try again.";
+      passErr.textContent =
+        "Incorrect password, or the payload is corrupted — check it and try again.";
     restoreBtn();
   }
 }
@@ -318,7 +326,7 @@ async function initPageViewer() {
       <div class="unlock-card-wrapper">
         <div class="unlock-card">
           <div class="unlock-icon-container">${lockIcon}</div>
-          <h2 class="unlock-title">Password Protected Paste</h2>
+          <h1 class="unlock-title">Password Protected Paste</h1>
           <p class="unlock-subtitle">Enter password to decrypt & view contents.</p>
           <div class="unlock-form-row">
             <input type="password" id="unlockPass" class="unlock-input" placeholder="Enter password…" aria-label="Paste password" aria-describedby="passErr" autocomplete="off">
@@ -372,7 +380,7 @@ async function initPageViewer() {
       <div class="unlock-card-wrapper">
         <div class="unlock-card">
           <div class="unlock-icon-container">${lockIcon}</div>
-          <h2 class="unlock-title">Decryption Key Required</h2>
+          <h1 class="unlock-title">Decryption Key Required</h1>
           <p class="unlock-subtitle">This paste is end-to-end encrypted. The key is normally part of the URL (#...), but was missing from your link.</p>
           <div class="unlock-form-row">
             <input type="text" id="manualKeyInput" class="unlock-input" placeholder="Paste decryption key…" aria-label="Decryption key" aria-describedby="keyErr" autocomplete="off" spellcheck="false">
@@ -452,7 +460,7 @@ async function initPageViewer() {
       <div class="unlock-card-wrapper">
         <div class="unlock-card">
           <div class="unlock-icon-container" style="border-color: var(--red-line); color: var(--red); background: var(--red-fill);">${lockIcon}</div>
-          <h2 class="unlock-title">Decryption Failed</h2>
+          <h1 class="unlock-title">Decryption Failed</h1>
           <p class="unlock-subtitle">Invalid decryption key or corrupted payload.</p>
           <div class="unlock-form-row">
             <input type="text" id="manualKeyInput" class="unlock-input" placeholder="Enter correct key…" aria-label="Decryption key" autocomplete="off" spellcheck="false">

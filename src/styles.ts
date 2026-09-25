@@ -139,6 +139,19 @@ export const BASE_CSS = `
     outline-offset: 2px;
   }
 
+  /* Visually-hidden headings for screen-reader landmarks. */
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
   /* Kills the 300ms double-tap-zoom delay on every control. */
   button, a, input, label, .ttl-option { touch-action: manipulation; }
 
@@ -198,7 +211,6 @@ export const BASE_CSS = `
       gap: 0.4rem;
       min-height: 48px;
     }
-
     .left-group, .footer-left {
       gap: 0.4rem;
     }
@@ -227,6 +239,15 @@ export const BASE_CSS = `
       width: 12px;
       height: 12px;
     }
+  }
+
+  /* Coarse pointers: 30px icon buttons pass WCAG AA (24px) but sit below the
+     40px+ comfort zone for thumbs — bump the hit area without changing the
+     visual glyph size. Header min-height (48px) still fits. */
+  @media (pointer: coarse) {
+    .btn-action { width: 40px; height: 40px; }
+    .inline-pass-copy { width: 40px; height: 40px; }
+    .px-modal-close { width: 40px; height: 40px; }
   }
 
   .brand {
@@ -277,8 +298,8 @@ export const BASE_CSS = `
   }
 
   .btn-action.active {
-    background: rgba(210, 153, 34, 0.18);
-    border-color: rgba(210, 153, 34, 0.45);
+    background: var(--amber-fill);
+    border-color: var(--amber-line);
     color: var(--amber);
   }
 
@@ -365,6 +386,34 @@ export const BASE_CSS = `
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.12); border-radius: 4px; }
   ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.22); }
+
+  /* Light theme: dark translucent thumbs, and truncation guards so the
+     320px-wide header/footer ellipsize instead of pushing Save off-screen. */
+  [data-theme="light"] ::-webkit-scrollbar-thumb { background: rgba(35, 32, 29, 0.22); }
+  [data-theme="light"] ::-webkit-scrollbar-thumb:hover { background: rgba(35, 32, 29, 0.35); }
+
+  .footer-left { overflow: hidden; }
+  #charCount {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .save-error {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  @media (max-width: 420px) {
+    .ttl-trigger-label {
+      max-width: 64px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
 `;
 
 // Shared Markdown typography and syntax highlighting styles
@@ -462,12 +511,12 @@ export const MARKDOWN_CSS = `
 
   .markdown-body blockquote blockquote, .preview-pane blockquote blockquote {
     border-left-color: var(--text-sub-accent);
-    background: rgba(244, 86, 157, 0.06);
+    background: var(--red-fill);
   }
 
   .markdown-body blockquote blockquote blockquote, .preview-pane blockquote blockquote blockquote {
-    border-left-color: #bb9af7;
-    background: linear-gradient(to right, rgba(187, 154, 247, 0.06), var(--bg));
+    border-left-color: var(--blue);
+    background: linear-gradient(to right, var(--blue-fill), var(--bg));
   }
 
   /* Anthracite Decorative Horizontal Rules with center ornament and top hairline */
@@ -509,6 +558,8 @@ export const MARKDOWN_CSS = `
 
   .markdown-body a, .preview-pane a { color: #5ec4e0; text-decoration: none; text-underline-offset: 3px; word-break: break-word; transition: color 0.2s ease; }
   .markdown-body a:hover, .preview-pane a:hover { color: #bbecff; text-decoration: underline; }
+  [data-theme="light"] .markdown-body a, [data-theme="light"] .preview-pane a { color: var(--text-accent); }
+  [data-theme="light"] .markdown-body a:hover, [data-theme="light"] .preview-pane a:hover { color: var(--text-accent); filter: brightness(0.8); }
   .markdown-body del, .preview-pane del { color: var(--text-muted); }
 
   /* GFM tables — Anthracite cyan borders & headers */
@@ -533,6 +584,10 @@ export const MARKDOWN_CSS = `
     background: rgba(15, 182, 214, 0.08);
     color: #0fb6d6;
     font-weight: 600;
+  }
+  [data-theme="light"] .markdown-body th, [data-theme="light"] .preview-pane th {
+    background: var(--blue-fill);
+    color: var(--blue);
   }
 
   .markdown-body tbody tr:nth-child(even),
@@ -565,8 +620,8 @@ export const MARKDOWN_CSS = `
   }
 
   .markdown-body input[type="checkbox"]:checked, .preview-pane input[type="checkbox"]:checked {
-    background: #0fb6d6;
-    border-color: #0fb6d6;
+    background: var(--text-accent);
+    border-color: var(--text-accent);
     animation: px-check-bounce 0.25s ease;
   }
 
@@ -583,7 +638,7 @@ export const MARKDOWN_CSS = `
     top: 1px;
     width: 4px;
     height: 8px;
-    border: solid #100e17;
+    border: solid var(--bg);
     border-width: 0 2px 2px 0;
     transform: rotate(45deg);
   }
@@ -657,6 +712,10 @@ export const MARKDOWN_CSS = `
     color: var(--sh-number);
     word-break: break-word;
   }
+  [data-theme="light"] .markdown-body :not(pre) > code, [data-theme="light"] .preview-pane :not(pre) > code {
+    background: var(--code-bg);
+    border-color: var(--border);
+  }
 
   .sh__token--keyword { color: var(--sh-keyword); font-weight: 600; }
   .sh__token--string { color: var(--sh-string); }
@@ -664,6 +723,16 @@ export const MARKDOWN_CSS = `
   .sh__token--number { color: var(--sh-number); }
   .sh__token--identifier { color: var(--sh-identifier); }
   .sh__token--sign { color: var(--sh-sign); }
+
+  /* Light Parchment: neon gradient text fails contrast on white, so content
+     emphasis falls back to solid ink. Dark keeps the gradient treatment. */
+  [data-theme="light"] :is(.markdown-body, .preview-pane) :is(h1, h2, h3, h4, h5, h6, strong, em, strong em, em strong) {
+    background-image: none;
+    -webkit-text-fill-color: currentColor;
+    color: var(--text);
+    border-image-source: linear-gradient(to right, var(--border-hover), transparent 35%);
+  }
+  [data-theme="light"] :is(.markdown-body, .preview-pane) em { color: var(--text); }
 `;
 
 // Landing page editor, live split preview, footer bar and share banner
@@ -746,15 +815,16 @@ export const LANDING_CSS = `
     border: 1px solid rgba(210, 153, 34, 0.3);
     border-radius: var(--radius);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+    overscroll-behavior: contain;
   }
 
   .ttl-menu[hidden] { display: none; }
-
   .ttl-option {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    padding: 0.35rem 0.5rem;
+    padding: 0.5rem 0.5rem;
+    min-height: 40px;
     border-radius: 5px;
     color: var(--text-muted);
     font-family: var(--mono);
@@ -821,6 +891,7 @@ export const LANDING_CSS = `
     padding: 1.75rem 2.5rem;
     overflow-y: auto;
     overflow-x: hidden;
+    overscroll-behavior: contain;
     border-left: 1px solid var(--border);
     background: rgba(0, 0, 0, 0.2);
     word-break: break-word;
@@ -927,6 +998,7 @@ export const LANDING_CSS = `
     padding: 1.25rem;
     background: rgba(10, 12, 16, 0.78);
     backdrop-filter: blur(12px);
+    overscroll-behavior: contain;
     -webkit-backdrop-filter: blur(12px);
     animation: px-fade-in 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   }
@@ -1037,9 +1109,9 @@ export const LANDING_CSS = `
   }
 
   .badge-ttl {
-    background: rgba(15, 182, 214, 0.12);
-    border-color: rgba(15, 182, 214, 0.35);
-    color: #58a6ff;
+    background: var(--blue-fill);
+    border-color: var(--blue-line);
+    color: var(--blue);
   }
 
   .px-modal-link-box {
@@ -1089,10 +1161,10 @@ export const LANDING_CSS = `
     align-items: flex-start;
     gap: 0.75rem;
     padding: 0.85rem 1rem;
-    background: rgba(248, 81, 73, 0.08);
-    border: 1px solid rgba(248, 81, 73, 0.3);
+    background: var(--red-fill);
+    border: 1px solid var(--red-line);
     border-radius: var(--radius);
-    color: #f0883e;
+    color: var(--red);
     font-size: 0.82rem;
     line-height: 1.45;
   }
@@ -1110,11 +1182,11 @@ export const LANDING_CSS = `
 
   .px-burn-warn-text {
     flex: 1;
-    color: #ff7b72;
+    color: var(--text);
   }
 
   .px-burn-warn-text strong {
-    color: #ffa198;
+    color: var(--red);
     display: block;
     margin-bottom: 2px;
   }
@@ -1180,8 +1252,9 @@ export const LANDING_CSS = `
     text-decoration: underline;
     font-family: inherit;
     font-size: inherit;
-    padding: 0;
-    margin-left: 0.2rem;
+    padding: 0.5rem 0.35rem;
+    margin: -0.5rem -0.35rem -0.5rem 0.2rem;
+    min-height: 40px;
     transition: color 0.15s ease;
   }
 
@@ -1415,6 +1488,7 @@ export const VIEWER_CSS = `
 
   .btn-unlock-submit:hover { filter: brightness(1.06); transform: translateY(-1px); }
   .btn-unlock-submit:active { transform: translateY(0); }
+  .btn-unlock-submit:disabled { opacity: 0.5; cursor: progress; filter: none; transform: none; }
 
   .unlock-err-msg {
     color: var(--red);
@@ -1433,6 +1507,9 @@ export const VIEWER_CSS = `
 export const NOT_FOUND_CSS = `
   body {
     background-image: radial-gradient(circle at 50% 30%, #161b22 0%, #0d1117 80%);
+  }
+  [data-theme="light"] body {
+    background-image: radial-gradient(circle at 50% 30%, #ede8dc 0%, #f8f6f0 80%);
   }
 
   .not-found-wrapper {

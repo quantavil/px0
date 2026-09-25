@@ -491,6 +491,17 @@ function initLanding() {
     });
 
     checkAndRestoreDraft();
+
+    // Desktop-only autofocus: the SSR `autofocus` attribute popped the mobile
+    // keyboard on page load. Focus only on fine-pointer devices with hover.
+    try {
+      if (
+        !textarea.value &&
+        window.matchMedia("(hover: hover) and (pointer: fine)").matches
+      ) {
+        textarea.focus();
+      }
+    } catch {}
   }
 
   const form = document.getElementById("pasteForm") as HTMLFormElement | null;
@@ -560,40 +571,49 @@ function initLanding() {
       let payload = text;
       let secretKeyBase64 = "";
 
-      if (passwordVal.length > 0) {
-        const salt = crypto.getRandomValues(new Uint8Array(16));
-        const iv = crypto.getRandomValues(new Uint8Array(12));
-        const cryptoKey = await deriveKeyFromPassword(passwordVal, salt);
-        const encodedText = new TextEncoder().encode(text);
-        const ciphertext = await crypto.subtle.encrypt(
-          { name: "AES-GCM", iv },
-          cryptoKey,
-          encodedText,
+      // crypto.subtle throws off HTTP / when WebCrypto is unavailable — without
+      // this the handler escapes past `fail()` and Save stays stuck disabled.
+      try {
+        if (passwordVal.length > 0) {
+          const salt = crypto.getRandomValues(new Uint8Array(16));
+          const iv = crypto.getRandomValues(new Uint8Array(12));
+          const cryptoKey = await deriveKeyFromPassword(passwordVal, salt);
+          const encodedText = new TextEncoder().encode(text);
+          const ciphertext = await crypto.subtle.encrypt(
+            { name: "AES-GCM", iv },
+            cryptoKey,
+            encodedText,
+          );
+
+          payload = `${PASS_PREFIX}${bytesToBase64Url(salt)}:${bytesToBase64Url(iv)}:${bytesToBase64Url(new Uint8Array(ciphertext))}`;
+        } else if (isE2ee) {
+          const cryptoKey = await crypto.subtle.generateKey(
+            { name: "AES-GCM", length: 256 },
+            true,
+            ["encrypt", "decrypt"],
+          );
+
+          const iv = crypto.getRandomValues(new Uint8Array(12));
+          const encodedText = new TextEncoder().encode(text);
+          const ciphertext = await crypto.subtle.encrypt(
+            { name: "AES-GCM", iv },
+            cryptoKey,
+            encodedText,
+          );
+
+          const exportedKey = await crypto.subtle.exportKey("raw", cryptoKey);
+          secretKeyBase64 = bytesToBase64Url(new Uint8Array(exportedKey));
+
+          const combined = new Uint8Array(iv.length + ciphertext.byteLength);
+          combined.set(iv, 0);
+          combined.set(new Uint8Array(ciphertext), iv.length);
+          payload = `${ENC_PREFIX}${bytesToBase64Url(combined)}`;
+        }
+      } catch {
+        fail(
+          "Encryption failed — WebCrypto is unavailable (needs HTTPS or localhost).",
         );
-
-        payload = `${PASS_PREFIX}${bytesToBase64Url(salt)}:${bytesToBase64Url(iv)}:${bytesToBase64Url(new Uint8Array(ciphertext))}`;
-      } else if (isE2ee) {
-        const cryptoKey = await crypto.subtle.generateKey(
-          { name: "AES-GCM", length: 256 },
-          true,
-          ["encrypt", "decrypt"],
-        );
-
-        const iv = crypto.getRandomValues(new Uint8Array(12));
-        const encodedText = new TextEncoder().encode(text);
-        const ciphertext = await crypto.subtle.encrypt(
-          { name: "AES-GCM", iv },
-          cryptoKey,
-          encodedText,
-        );
-
-        const exportedKey = await crypto.subtle.exportKey("raw", cryptoKey);
-        secretKeyBase64 = bytesToBase64Url(new Uint8Array(exportedKey));
-
-        const combined = new Uint8Array(iv.length + ciphertext.byteLength);
-        combined.set(iv, 0);
-        combined.set(new Uint8Array(ciphertext), iv.length);
-        payload = `${ENC_PREFIX}${bytesToBase64Url(combined)}`;
+        return;
       }
 
       // Measured on the final payload, not the typed text: base64 makes an
@@ -641,6 +661,10 @@ function initLanding() {
         try {
           localStorage.removeItem("px0_draft");
         } catch {}
+        // Don't retain the password in the DOM after a successful save.
+        rememberedPassword = "";
+        if (inlinePassInput) inlinePassInput.value = "";
+        syncPasswordState();
         setSaveBusy(null);
 
         const pasteUrl = `/${data.id}${
@@ -660,6 +684,14 @@ function initLanding() {
 }
 
 // Displays the paste result as a focused, high-contrast, centered modal card
+function escapeHtmlAttr(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
 function showSuccessModal(
   url: string,
   isBurn: boolean,
@@ -667,10 +699,8 @@ function showSuccessModal(
   ttlLabel: string,
 ) {
   const fullUrl = window.location.origin + url;
-
-  try {
-    window.history.pushState(null, "", fullUrl);
-  } catch {}
+  const escUrl = escapeHtmlAttr(fullUrl);
+  const escTtl = escapeHtmlAttr(ttlLabel);
 
   document.getElementById("pxModalOverlay")?.remove();
 
@@ -687,7 +717,7 @@ function showSuccessModal(
 
   const expiryBadgeHtml = isBurn
     ? `${flameSvg} Burn After Read (1 View)`
-    : `${clockSvg} ${ttlLabel}`;
+    : `${clockSvg} ${escTtl}`;
 
   overlay.innerHTML = `
     <div id="pxModalCard" class="px-modal-card${isBurn ? " is-burn" : ""}" role="dialog" aria-modal="true" aria-labelledby="pxModalTitle">
@@ -707,7 +737,7 @@ function showSuccessModal(
       </div>
 
       <div class="px-modal-link-box">
-        <input type="text" id="pxPasteUrl" class="px-modal-input" readonly value="${fullUrl}" aria-label="Paste URL" spellcheck="false" autocomplete="off">
+        <input type="text" id="pxPasteUrl" class="px-modal-input" readonly value="${escUrl}" aria-label="Paste URL" spellcheck="false" autocomplete="off">
         <button type="button" id="pxModalCopyBtn" class="btn-save px-modal-copy-btn" title="Copy link to clipboard (Enter / Ctrl+C)" aria-label="Copy link to clipboard">
           ${copyIcon}
           <span class="px-modal-copy-text">Copy</span>
@@ -731,7 +761,7 @@ function showSuccessModal(
         ${
           !isBurn
             ? `
-        <a href="${fullUrl}" target="_blank" rel="noopener noreferrer" id="pxModalOpenBtn" class="btn-action px-modal-btn" title="Open paste in new tab">
+        <a href="${escUrl}" target="_blank" rel="noopener noreferrer" id="pxModalOpenBtn" class="btn-action px-modal-btn" title="Open paste in new tab">
           ${externalLinkIcon}
           <span>Open</span>
         </a>
@@ -765,7 +795,15 @@ function showSuccessModal(
     "pxModalDoneBtn",
   ) as HTMLButtonElement | null;
 
+  const handleKeydown = (e: KeyboardEvent) => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      closeModal();
+    }
+  };
+
   const closeModal = () => {
+    document.removeEventListener("keydown", handleKeydown);
     overlay.classList.add("closing");
     setTimeout(() => overlay.remove(), 160);
   };
@@ -806,13 +844,6 @@ function showSuccessModal(
     }
   });
 
-  const handleKeydown = (e: KeyboardEvent) => {
-    if (e.key === "Escape") {
-      e.preventDefault();
-      document.removeEventListener("keydown", handleKeydown);
-      closeModal();
-    }
-  };
   document.addEventListener("keydown", handleKeydown);
 
   // Focus trap for accessibility
