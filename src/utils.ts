@@ -1,6 +1,4 @@
-// Storage sentinels. Unambiguous enough that user content can't accidentally
-// start with one, and defined once so `.substring(13)` magic numbers and
-// copies of the literal can't drift apart across the worker and the client.
+// Storage sentinels, defined once so worker and client can't drift apart.
 export const BURN_PREFIX = "__PX0_BURN__:";
 export const ENC_PREFIX = "__PX0_ENC__:";
 
@@ -52,9 +50,7 @@ export function sanitizeHtml(text: string): string {
     .replace(/'/g, "&#039;");
 }
 
-// Robust Base64URL decoder. Strips stray whitespace and any existing padding
-// before restoring it, so keys pasted out of a URL bar still decode instead of
-// throwing a DOMException from atob().
+// Base64URL decoder tolerant of pasted URL-bar keys (stray whitespace/padding).
 export function decodeBase64Url(str: string): string {
   let base64 = str
     .replace(/\s/g, "")

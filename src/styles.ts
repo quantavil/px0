@@ -53,7 +53,7 @@ export const CSS_VARIABLES = `
 
     --serif: "Charter", "Bitstream Charter", "Sitka Text", "Cambria", Georgia, serif;
     --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-    --sans: "Plus Jakarta Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     --control-h: 32px;
   }
 `;
@@ -76,6 +76,7 @@ export const BASE_CSS = `
 
   body {
     min-height: 100vh;
+    min-height: 100dvh;
     display: flex;
     flex-direction: column;
     background-color: transparent;
@@ -225,9 +226,7 @@ export const BASE_CSS = `
     }
   }
 
-  /* Coarse pointers: 30px icon buttons pass WCAG AA (24px) but sit below the
-     40px+ comfort zone for thumbs — bump the hit area without changing the
-     visual glyph size. Header min-height (48px) still fits. */
+  /* Coarse pointers: 40px hit area without changing glyph size. */
   @media (pointer: coarse) {
     .btn-action,
     .util-strip .btn-action,
@@ -353,14 +352,10 @@ export const BASE_CSS = `
     transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease, filter 0.2s ease;
   }
 
-  /* One size for every badge glyph. The icons carry their own width/height
-     attributes and disagreed — flameSvg is authored at 24px and rendered
-     nearly twice the height of its own badge text. */
+  /* One size for every badge glyph. */
   .badge svg { width: 13px; height: 13px; flex-shrink: 0; }
 
-  /* Semantic badge variants. Text, fill and border are always drawn from the
-     same colour token — .badge-public previously mixed amber text with blue
-     chrome. */
+  /* Badge text, fill, and border always share one color token. */
   .badge-encrypted { color: var(--green); background: var(--green-fill); border-color: var(--green-line); }
   .badge-public    { color: var(--blue);  background: var(--blue-fill);  border-color: var(--blue-line); }
   .badge-ttl       { color: var(--amber); background: var(--amber-fill); border-color: var(--amber-line); }
@@ -372,9 +367,7 @@ export const BASE_CSS = `
   ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.12); border-radius: 4px; }
   ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.22); }
 
-  /* Truncation guards so a 320px-wide footer ellipsizes instead of pushing
-     Save off-screen. NOTE: .footer-left must stay overflow:visible — the
-     TTL menu opens upward out of it and overflow:hidden would clip it. */
+  /* Footer truncation guards. NOTE: .footer-left must stay overflow:visible (TTL menu). */
   #charCount {
     min-width: 0;
     overflow: hidden;
@@ -582,9 +575,7 @@ export const MARKDOWN_CSS = `
   .markdown-body pre:hover .code-copy-btn,
   .code-copy-btn:focus-visible { opacity: 1; }
 
-  /* A phone has no hover, so revealing this on :hover meant it was drawn at
-     opacity 0 forever — present and tappable, but invisible. Coarse pointers
-     get it permanently, at a size a thumb can actually hit. */
+  /* No hover on phones: coarse pointers always show the copy button. */
   @media (hover: none) {
     .code-copy-btn { opacity: 0.7; width: 34px; height: 34px; }
   }
@@ -631,9 +622,12 @@ export const MARKDOWN_CSS = `
 export const LANDING_CSS = `
   body { overflow: hidden; }
 
-  /* Slim status strip above the editor: view/status concerns (counter,
-     draft notice, save error, split toggle) live here so the bottom pill
-     stays a single row of save decisions. */
+  /* Mobile scrolls so the keyboard can't trap the Save bar. */
+  @media (max-width: 640px) {
+    body { overflow: auto; }
+  }
+
+  /* Status strip above the editor; the bottom pill stays one row. */
   .util-strip {
     width: 100%;
     max-width: 76rem;
@@ -660,11 +654,7 @@ export const LANDING_CSS = `
     height: 30px;
   }
 
-  /* Plaintext/E2EE segmented control with a sliding thumb. Two radios, one
-     name — the browser keeps them mutually exclusive, and the :checked
-     styles show the choice, so no JS label sync is needed. Unselected side
-     stays a dim ghost; only the thumb side lights up. Monochrome until
-     E2EE is chosen, which earns the amber. */
+  /* Plaintext/E2EE segmented control with a sliding thumb. */
   .mode-seg {
     position: relative;
     display: inline-flex;
@@ -845,6 +835,10 @@ export const LANDING_CSS = `
     flex-direction: row;
     min-height: 0;
     overflow: hidden;
+    width: 100%;
+    max-width: 76rem;
+    margin: 0 auto;
+    padding: 0 1.2rem;
   }
 
   textarea {
@@ -858,22 +852,19 @@ export const LANDING_CSS = `
     font-family: var(--mono);
     font-size: 0.98rem;
     line-height: 1.7;
-    padding: 1.75rem 2rem;
+    padding: 1.75rem 0;
     resize: none;
   }
 
   textarea::placeholder { color: var(--text-dim); }
 
-  /* The editor is the primary surface and is auto-focused on load. The
-     global :focus-visible outline drew a stray amber box around its
-     content-height box (only the bottom edge visible, full-width). The
-     blinking caret is the focus indicator here, as in any code editor. */
+  /* No focus outline on the editor; the caret is the indicator. */
   textarea:focus { outline: none; }
 
   .preview-pane {
     display: none;
     height: 100%;
-    padding: 1.75rem 2.5rem;
+    padding: 1.75rem 0;
     overflow-y: auto;
     overflow-x: hidden;
     overscroll-behavior: contain;
@@ -890,6 +881,14 @@ export const LANDING_CSS = `
     width: 50%;
     max-width: 50%;
     min-width: 0;
+  }
+
+  /* Split gutters live here (not on the container) so single-pane text
+     aligns exactly with the util-strip above it. */
+  .editor-container.split-active textarea { padding-right: 1.5rem; }
+  .editor-container.split-active .preview-pane {
+    padding-left: 1.5rem;
+    padding-right: 0;
   }
 
   .stats-label {
@@ -1168,7 +1167,8 @@ export const LANDING_CSS = `
   .draft-discard:hover { color: var(--red); }
 
   @media (max-width: 767px) {
-    textarea, .preview-pane { padding: 1.25rem 1rem; }
+    textarea, .preview-pane { padding: 1.25rem 0; }
+    .editor-container { padding: 0 0.9rem; }
 
     .editor-container.split-active { flex-direction: column; }
     .editor-container.split-active textarea,
@@ -1177,6 +1177,8 @@ export const LANDING_CSS = `
       max-width: 100%;
       height: 50%;
       flex: 1 1 50%;
+      padding-left: 0;
+      padding-right: 0;
     }
     .editor-container.split-active .preview-pane {
       border-left: none;
@@ -1189,8 +1191,16 @@ export const LANDING_CSS = `
       width: calc(100% - 1rem);
       padding: 0 0.9rem;
     }
+    .editor-container {
+      width: calc(100% - 1rem);
+      padding: 0 0.9rem;
+    }
     .editor-container.split-active textarea {
-      display: none !important;
+      display: block !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      height: 50% !important;
+      flex: 1 1 50% !important;
     }
     .editor-container.split-active .preview-pane {
       display: block !important;

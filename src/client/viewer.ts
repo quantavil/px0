@@ -56,10 +56,7 @@ function startExpiryCountdown() {
     badge.textContent = formatTimeLeft(remaining);
     badge.insertAdjacentHTML("afterbegin", `${clockSvg} `);
     if (remaining > 0) return;
-    // The countdown used to just stop, leaving an amber "expired" badge over
-    // content that a reload would 404. The text stays on screen — it is already
-    // in this reader's browser and yanking it away helps nobody — but the badge
-    // says plainly that the link is dead now.
+    // Expired: keep the text on screen, flip the badge to say the link is dead.
     badge.className = "badge badge-expired";
     badge.title = "This paste has expired — reloading will no longer find it";
     clearInterval(interval);
@@ -287,12 +284,16 @@ async function initPageViewer() {
     const tryManualKey = () => {
       const val = keyInput?.value.trim() ?? "";
       if (!val) return;
+      if (btnDecrypt) btnDecrypt.disabled = true;
       const cleanKey = val.startsWith("#") ? val.slice(1) : val;
       if (window.location.hash === `#${cleanKey}`) {
         initPageViewer();
       } else {
         window.location.hash = cleanKey;
       }
+      setTimeout(() => {
+        if (btnDecrypt) btnDecrypt.disabled = false;
+      }, 1500);
     };
 
     if (btnDecrypt) {
@@ -367,12 +368,16 @@ async function initPageViewer() {
     const retryManualKey = () => {
       const val = keyInput?.value.trim() ?? "";
       if (!val) return;
+      if (btnDecrypt) btnDecrypt.disabled = true;
       const cleanKey = val.startsWith("#") ? val.slice(1) : val;
       if (window.location.hash === `#${cleanKey}`) {
         initPageViewer();
       } else {
         window.location.hash = cleanKey;
       }
+      setTimeout(() => {
+        if (btnDecrypt) btnDecrypt.disabled = false;
+      }, 1500);
     };
 
     if (btnDecrypt) btnDecrypt.addEventListener("click", retryManualKey);
@@ -395,10 +400,8 @@ if (document.readyState === "loading") {
 } else {
   initPageViewer();
 }
-// The hash fragment only ever carries the E2EE key, so it is the only thing
-// worth re-initialising for. Re-running the whole init on any hash change
-// destroyed already-rendered content: following an in-page `#heading` link
-// re-rendered the unlock card and forced the reader to retry.
+// Hash only ever carries the E2EE key; ignore hash changes once decrypted
+// (in-page #heading links must not re-render the unlock card).
 window.addEventListener("hashchange", () => {
   if (window.__PX0_DATA__?.isEncrypted && !window.__PX0_DECRYPTED_TEXT__) {
     initPageViewer();

@@ -169,9 +169,7 @@ function initLanding() {
     });
   }
 
-  // Plaintext is the default; the user opts into E2EE per paste. The two
-  // radios share one name, so the browser keeps them mutually exclusive and
-  // the :checked badge styles show the choice — no JS label sync needed.
+  // Radios share one name, so the browser keeps them exclusive with no JS sync.
 
   function formatBytes(bytes: number): string {
     if (bytes < 1024) return `${bytes} B`;
@@ -418,9 +416,7 @@ function initLanding() {
       ) as HTMLButtonElement | null;
       const saveBtnLabel = saveBtn?.querySelector("span");
 
-      // Generating the E2EE key + encrypting takes a noticeable moment, during
-      // which Save only dimmed. The unlock button already says "Unlocking…";
-      // the create side needs the same honesty.
+      // Keygen + encryption take a moment; label the button honestly.
       const setSaveBusy = (label: string | null) => {
         isSubmitting = label !== null;
         if (saveBtn) saveBtn.disabled = label !== null;
@@ -482,10 +478,7 @@ function initLanding() {
         return;
       }
 
-      // Measured on the final payload, not the typed text: base64 makes an
-      // encrypted paste ~35% larger, so the server's limit bites at a size the
-      // editor never showed. Checking here costs one encode and saves uploading
-      // several megabytes just to be told 413.
+      // Check the final payload: base64 inflates E2EE pastes ~35%.
       if (new TextEncoder().encode(payload).byteLength > MAX_PASTE_BYTES) {
         fail(
           isE2ee
@@ -545,12 +538,10 @@ function initLanding() {
 }
 
 // Displays the paste result as a focused, high-contrast, centered modal card
+import { sanitizeHtml } from "../utils";
+
 function escapeHtmlAttr(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/"/g, "&quot;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+  return sanitizeHtml(s);
 }
 
 let activeModalClose: (() => void) | null = null;

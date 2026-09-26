@@ -37,11 +37,11 @@ import {
   TTL_MAP,
 } from "./utils";
 
-// Obsidian is the only theme. The <html> tag carries data-theme="obsidian"
-// statically, so there is no bootstrap script and the CSP needs no hash.
+// Obsidian is the only theme; <html> carries it statically (no bootstrap, no CSP hash).
 
 type Bindings = {
   PASTES_KV: KVNamespace;
+  PASTE_RATE_LIMITER?: RateLimit;
 };
 
 export const inMemoryPastes = new Map<
@@ -56,8 +56,7 @@ export function setInMemoryPaste(
   deleteToken?: string,
 ) {
   const expiresAt = ttlSeconds ? Date.now() + ttlSeconds * 1000 : undefined;
-  // Dev/e2e/test fallback has no KV TTL sweep — cap it so never-read keys
-  // can't grow without bound until restart.
+  // Dev fallback has no KV sweep; cap it so unread keys can't grow unbounded.
   if (inMemoryPastes.size > 2000) {
     const now = Date.now();
     for (const [key, entry] of inMemoryPastes.entries()) {
@@ -89,8 +88,7 @@ type PasteRecord = {
   deleteToken?: string;
 };
 
-// Read a paste from KV (with metadata) or the in-memory fallback,
-// returning the payload plus its absolute expiry timestamp (ms) when known.
+// Read a paste from KV or the in-memory fallback, with absolute expiry when known.
 async function readPaste(
   id: string,
   env?: Bindings,
@@ -131,7 +129,10 @@ async function readPaste(
   };
 }
 
-// In-memory rate limiting map (30 pastes / minute per IP)
+// Single source of truth for paste IDs (was copy-pasted in three handlers).
+export const PASTE_ID_RE = /^[A-Za-z0-9-_]{1,64}$/;
+
+// In-memory limiter (30/min/IP); fallback when the native binding is absent.
 export const rateLimitMap = new Map<
   string,
   { count: number; resetAt: number }
@@ -173,6 +174,23 @@ export function isRateLimited(
   return record.count > limit;
 }
 
+// Prefers the native binding when provisioned, else in-memory (see above).
+export async function checkRateLimit(
+  env: Bindings | undefined,
+  ip: string,
+): Promise<boolean> {
+  const limiter = env?.PASTE_RATE_LIMITER;
+  if (limiter) {
+    try {
+      const { success } = await limiter.limit({ key: ip });
+      return !success;
+    } catch {
+      // Fall through to in-memory on binding errors.
+    }
+  }
+  return isRateLimited(ip);
+}
+
 const app = new Hono<{ Bindings: Bindings }>();
 
 // Global Security Middleware
@@ -182,9 +200,7 @@ app.use("*", async (c, next) => {
   c.header("X-Content-Type-Options", "nosniff");
   c.header("Referrer-Policy", "no-referrer");
   c.header("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
-  // Pastes are unlisted, not secret-by-obscurity — but nothing stopped a crawler
-  // indexing one the moment its link appeared in a public channel. The landing
-  // page is the only thing here that wants to be findable.
+  // Unlisted pastes still get crawled once linked publicly; only / should be findable.
   if (c.req.path !== "/") c.header("X-Robots-Tag", "noindex, nofollow");
   c.header(
     "Content-Security-Policy",
@@ -192,7 +208,7 @@ app.use("*", async (c, next) => {
   );
 });
 
-// Graceful 500s instead of unhandled throws on KV/network blips.
+// Graceful 500s on KV/network blips.
 app.onError((err, c) => {
   console.error("px0 unhandled error:", err);
   const accept = c.req.header("accept") || "";
@@ -207,7 +223,7 @@ app.get("/favicon.ico", (c) => {
   return c.body(faviconSvg, 200, { "Content-Type": "image/svg+xml" });
 });
 
-// Bundled Static Client Script Routes (No template string escaping XSS!)
+// Bundled client scripts (separate files = no template-string XSS risk).
 app.get("/static/landing.js", (c) => {
   return c.body(landingJs, 200, {
     "Content-Type": "application/javascript; charset=utf-8",
@@ -263,7 +279,7 @@ app.get("/", (c) => {
               <span id="draftContainer"></span>
               <span id="saveError" class="save-error" role="alert"></span>
             </div>
-            <button type="button" id="btnSplit" class="btn-action" title="Toggle Split Live Preview" aria-label="Toggle Split Live Preview" aria-pressed="false">
+            <button type="button" id="btnSplit" class="btn-action" title="Toggle preview" aria-label="Toggle preview" aria-pressed="false">
               ${raw(splitIcon)}
             </button>
           </div>
@@ -319,7 +335,7 @@ app.get("/", (c) => {
 // 2. Submit Paste API
 app.post("/api/paste", async (c) => {
   const clientIp = c.req.header("cf-connecting-ip") || "127.0.0.1";
-  if (isRateLimited(clientIp)) {
+  if (await checkRateLimit(c.env, clientIp)) {
     return c.json(
       { error: "Rate limit exceeded. Please try again later." },
       429,
@@ -331,10 +347,8 @@ app.post("/api/paste", async (c) => {
     return c.json({ error: "Payload exceeds 5MB limit" }, 413);
   }
 
-  // The browser posts JSON; a terminal posts the file. Requiring JSON meant
-  // `curl` users had to hand-escape newlines and quotes out of the very
-  // markdown they were pasting. Parse the media type exactly so lookalikes
-  // like `application/json-patch+json` don't take the JSON path.
+  // Accept raw bodies too so `curl` users skip JSON escaping; match the
+  // media type exactly so lookalikes (e.g. json-patch+json) miss the JSON path.
   const rawContentType =
     c.req.header("content-type")?.split(";")[0]?.trim().toLowerCase() ?? "";
   const isJson = rawContentType === "application/json";
@@ -363,8 +377,7 @@ app.post("/api/paste", async (c) => {
     return c.json({ error: "Paste size exceeds 5MB limit" }, 413);
   }
 
-  // 8-char 64-alphabet IDs give 48 bits of entropy; still, never silently
-  // overwrite an existing key and orphan its deleteToken. Retry on collision.
+  // Never silently overwrite a key (would orphan its deleteToken); retry on collision.
   let id = generateShortId(8);
   for (let attempt = 0; attempt < 3; attempt++) {
     if (!(await readPaste(id, c.env))) break;
@@ -392,10 +405,8 @@ app.post("/api/paste", async (c) => {
     setInMemoryPaste(id, storedPayload, ttlSeconds, deleteToken);
   }
 
-  // A terminal wants something pipeable, so the raw-body path answers with the
-  // bare URL. The header states the security posture the browser UI shows as a
-  // badge: nothing posted this way is encrypted — all the crypto lives in
-  // landing.ts, and curl has none of it.
+  // Raw-body callers get a pipeable URL; the header states the plaintext
+  // posture (all crypto lives in landing.ts, curl has none).
   return isJson
     ? c.json({ id, deleteToken })
     : c.text(`${new URL(c.req.url).origin}/${id}\n`, 200, {
@@ -406,22 +417,20 @@ app.post("/api/paste", async (c) => {
 
 // 3. Delete Paste API (instant, regardless of TTL)
 app.delete("/api/paste/:id", async (c) => {
-  // Same budget as creation: knowing an id is the only credential here, so an
-  // unthrottled delete endpoint is a free id-guessing loop. Note: this map is
-  // per-isolate Worker memory, so it blunts single-edge abuse rather than
-  // providing a global throttle.
-  if (isRateLimited(c.req.header("cf-connecting-ip") || "127.0.0.1")) {
+  // Same budget as creation (id knowledge is the only credential here).
+  if (
+    await checkRateLimit(c.env, c.req.header("cf-connecting-ip") || "127.0.0.1")
+  ) {
     return c.json(
       { error: "Rate limit exceeded. Please try again later." },
       429,
     );
   }
   const id = c.req.param("id");
-  if (!/^[A-Za-z0-9-_]{1,64}$/.test(id)) {
+  if (!PASTE_ID_RE.test(id)) {
     return c.json({ error: "Paste not found" }, 404);
   }
-  // Prefer the header (query strings persist in history/edge logs); the query
-  // param remains for backwards compatibility.
+  // Header preferred (query strings linger in history/logs); query kept for compat.
   const providedToken =
     c.req.header("x-delete-token") || c.req.query("token") || "";
 
@@ -430,8 +439,7 @@ app.delete("/api/paste/:id", async (c) => {
     return c.json({ error: "Paste not found" }, 404);
   }
 
-  // Fail closed: a record without a stored token can never be deleted by
-  // token, otherwise legacy/token-less rows would be deletable by anyone.
+  // Fail closed: token-less records can never be deleted by token.
   if (!record.deleteToken || record.deleteToken !== providedToken) {
     return c.json({ error: "Unauthorized: Invalid delete token" }, 401);
   }
@@ -447,7 +455,7 @@ app.delete("/api/paste/:id", async (c) => {
 // 4. Render View Route
 app.get("/:id", async (c) => {
   const id = c.req.param("id");
-  if (!/^[A-Za-z0-9-_]{1,64}$/.test(id)) {
+  if (!PASTE_ID_RE.test(id)) {
     return c.text("Paste Expired or Not Found", 404);
   }
   const record = await readPaste(id, c.env);
@@ -490,10 +498,9 @@ app.get("/:id", async (c) => {
     );
   }
 
-  // Check and handle Burn After Read self-destruction with bot/prefetch protection
+  // Burn-after-read: never burn on prefetch (values can combine, so substring-match).
   const isBurnAfterRead = rawContent.startsWith(BURN_PREFIX);
   const isConfirmed = c.req.query("confirm") === "1";
-  // Real-world values can be combined (`prefetch;prerender`), so substring-match.
   const purpose = c.req.header("purpose") || "";
   const secPurpose = c.req.header("sec-purpose") || "";
   const isPrefetch =
@@ -546,8 +553,7 @@ app.get("/:id", async (c) => {
   if (isBurnAfterRead) {
     rawContent = rawContent.slice(BURN_PREFIX.length);
     expiresAtMs = undefined; // burn-after-read pastes self-destruct on view; no countdown
-    // Fail closed: if the delete throws, 500 via onError without rendering the
-    // content below — never show a paste we failed to burn.
+    // Fail closed: if the delete throws, 500 without rendering (never show unburned content).
     if (c.env?.PASTES_KV) {
       await c.env.PASTES_KV.delete(id);
     } else {
@@ -558,8 +564,7 @@ app.get("/:id", async (c) => {
   const ttlLabel =
     expiresAtMs !== undefined ? formatTimeLeft(expiresAtMs - Date.now()) : "";
 
-  // Password protection was removed: legacy password pastes are retired
-  // rather than rendered as ciphertext.
+  // Legacy password pastes are retired, not rendered.
   if (rawContent.startsWith("__PX0_PASS__:")) {
     return c.text(
       "Paste Unavailable — password pastes are no longer supported",
@@ -570,8 +575,7 @@ app.get("/:id", async (c) => {
   let renderedHtml = "";
 
   if (!isEncrypted) {
-    // Same renderer the browser uses for the live preview and for decrypted
-    // E2EE pastes, so every surface produces identical HTML.
+    // Same renderer as live preview / decrypted pastes: identical HTML everywhere.
     renderedHtml = renderMarkdown(rawContent);
   }
 
@@ -614,10 +618,7 @@ app.get("/:id", async (c) => {
               <button type="button" class="btn-action" id="copyContentBtn" title="Copy Content" aria-label="Copy Content">${raw(copyIcon)}</button>
               <button type="button" class="btn-action" id="downloadBtn" title="Download as .md" aria-label="Download as Markdown">${raw(downloadIcon)}</button>
               ${
-                // /raw serves whatever is in storage. For an encrypted paste that
-                // is the ciphertext, so the button was handing the reader
-                // `__PX0_ENC__:aGVsbG8…` right after they had successfully
-                // decrypted the page. Download covers that case instead.
+                // /raw serves stored bytes (ciphertext for E2EE); Download covers that case instead.
                 isBurnAfterRead || isEncrypted
                   ? ""
                   : html`<a href="/raw/${id}" target="_blank" rel="noopener" class="btn-action" id="rawBtn" title="View Raw" aria-label="View Raw">${raw(rawIcon)}</a>`
@@ -657,9 +658,7 @@ app.get("/:id", async (c) => {
       </html>
     `,
     200,
-    // Every view/raw response is private and unlisted: never let an edge cache
-    // re-serve one. For burn pastes this is load-bearing (the paste is deleted
-    // by this very request); for the rest it keeps unlisted links private.
+    // Private + unlisted: never let an edge cache re-serve (load-bearing for burn pastes).
     { "Cache-Control": "no-store" },
   );
 });
@@ -667,7 +666,7 @@ app.get("/:id", async (c) => {
 // 4. View Raw Route
 app.get("/raw/:id", async (c) => {
   const id = c.req.param("id");
-  if (!/^[A-Za-z0-9-_]{1,64}$/.test(id)) {
+  if (!PASTE_ID_RE.test(id)) {
     return c.text("Paste Expired or Not Found", 404);
   }
   const record = await readPaste(id, c.env);
@@ -679,7 +678,13 @@ app.get("/raw/:id", async (c) => {
 
   if (rawContent.startsWith(BURN_PREFIX)) {
     const isConfirmed = c.req.query("confirm") === "1";
-    if (!isConfirmed) {
+    const purpose = (c.req.header("purpose") || "").toLowerCase();
+    const secPurpose = (c.req.header("sec-purpose") || "").toLowerCase();
+    const isPrefetch =
+      purpose.includes("prefetch") ||
+      secPurpose.includes("prefetch") ||
+      secPurpose.includes("prerender");
+    if (!isConfirmed || isPrefetch) {
       return c.text(
         "This is a Burn-After-Read paste. Accessing it will permanently destroy it.\nTo view and self-destruct, append ?confirm=1 to this URL.\n",
         200,

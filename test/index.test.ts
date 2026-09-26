@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import {
   formatTimeLeft,
   renderMarkdown,
@@ -137,6 +137,9 @@ describe("Client Shared Utilities & Post-Sanitizer", () => {
 });
 
 describe("Hono Security & Route Handlers", () => {
+  beforeEach(() => {
+    rateLimitMap.clear();
+  });
   test("Global middleware sets security headers on all routes", async () => {
     const res = await app.request("/");
     expect(res.headers.get("X-Frame-Options")).toBe("DENY");
@@ -619,5 +622,71 @@ describe("Hono Security & Route Handlers", () => {
     const htmlText = await viewRes.text();
     expect(htmlText).toContain('id="deleteBtn"');
     expect(htmlText).toContain('style="display: none;"');
+  });
+
+  test("sanitizer blocks embedded tab/newline javascript: bypass", () => {
+    for (const payload of [
+      '<a href="java\tscript:alert(1)">x</a>',
+      '<a href="java\nscript:alert(1)">x</a>',
+      '<a href="java\rscript:alert(1)">x</a>',
+      '<a href="jav\tascript:alert(1)">x</a>',
+    ]) {
+      const cleaned = sanitizeOutputHtml(payload);
+      expect(cleaned).not.toContain("java");
+      expect(cleaned).toContain('href="#"');
+    }
+  });
+
+  test("sanitizer allows raster data: images, blocks html/svg", () => {
+    expect(
+      sanitizeOutputHtml('<img src="data:image/png;base64,AAA">'),
+    ).toContain('src="data:image/png;base64,AAA"');
+    expect(
+      sanitizeOutputHtml('<img src="data:text/html,<h1>x</h1>">'),
+    ).toContain('src="#"');
+    expect(
+      sanitizeOutputHtml('<img src="data:image/svg+xml;base64,AAA">'),
+    ).toContain('src="#"');
+  });
+
+  test("sanitizer blocks javascript: hidden in second srcset candidate", () => {
+    const cleaned = sanitizeOutputHtml(
+      '<img srcset="a.jpg 1x, javascript:alert(1) 2x">',
+    );
+    expect(cleaned).toContain('srcset="#"');
+  });
+
+  test("burn /raw/:id resists prefetch without confirm", async () => {
+    const createRes = await app.request("/api/paste", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: "raw burn", ttl: "burn" }),
+    });
+    const { id } = (await createRes.json()) as { id: string };
+    const prefetch = await app.request(`/raw/${id}`, {
+      headers: { "Sec-Purpose": "prefetch" },
+    });
+    expect(prefetch.status).toBe(200);
+    const text = await prefetch.text();
+    expect(text).toContain("Burn-After-Read");
+    // Still alive afterwards.
+    const confirm = await app.request(`/raw/${id}?confirm=1`);
+    expect(confirm.status).toBe(200);
+    expect(await confirm.text()).toBe("raw burn");
+  });
+
+  test("rate limiter returns 429 after 30 pastes per minute", async () => {
+    rateLimitMap.clear();
+    let lastStatus = 200;
+    for (let i = 0; i < 31; i++) {
+      const res = await app.request("/api/paste", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: `rl ${i}` }),
+      });
+      lastStatus = res.status;
+    }
+    expect(lastStatus).toBe(429);
+    rateLimitMap.clear();
   });
 });
