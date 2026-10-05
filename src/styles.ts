@@ -861,9 +861,8 @@ export const LANDING_CSS = `
 
   textarea::placeholder { color: var(--text-dim); }
 
-  /* Keep the editor quiet while making keyboard focus visible. */
+  /* Keep the writing surface free of focus decoration. */
   textarea:focus { outline: none; }
-  textarea:focus-visible { box-shadow: inset 2px 0 var(--amber-line); }
 
   .preview-pane {
     display: none;

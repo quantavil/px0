@@ -14,7 +14,6 @@ Scope: screenshot scrolling issue, editor layout, keyboard navigation, draft lif
 | `src/client/landing.ts` | Malformed successful JSON escaped the handler and left Save disabled. | Validate response parsing and paste ID, show an error, restore the button. |
 | `src/index.ts` | On phones, hidden full label plus aria-hidden short label removed the Plaintext radio's accessible name. | Give the radio an explicit name. |
 | `src/client/landing.ts` | Changing expiration during a pending save made the success dialog claim the new duration rather than the submitted duration. | Capture the label alongside the submitted expiration. |
-| `src/styles.ts` | Editor suppressed every focus outline. | Add a quiet visible keyboard-focus treatment. |
 
 ## Rejected findings / existing behavior verified
 
@@ -32,3 +31,5 @@ Scope: screenshot scrolling issue, editor layout, keyboard navigation, draft lif
 - 29 Chromium browser tests pass (12 new regression cases).
 - Desktop and phone screenshots inspected; landscape layout tested.
 - Physical mobile keyboard behavior and other browser engines were not tested.
+
+Follow-up: removed the inset amber focus stripe at the user’s request; the editor remains undecorated while focused.
