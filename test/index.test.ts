@@ -167,6 +167,8 @@ describe("Hono Security & Route Handlers", () => {
     expect(res.headers.get("Cache-Control")).toContain("no-cache");
     const jsText = await res.text();
     expect(jsText.length).toBeGreaterThan(100);
+    // Bundle size optimization: landing script is lightweight and does not bundle heavy parsers
+    expect(jsText.length).toBeLessThan(25000);
   });
 
   test("GET /static/viewer.js returns minified client viewer script with 200 OK", async () => {
@@ -176,6 +178,58 @@ describe("Hono Security & Route Handlers", () => {
     expect(res.headers.get("Cache-Control")).toContain("no-cache");
     const jsText = await res.text();
     expect(jsText.length).toBeGreaterThan(100);
+    // Bundle size optimization: viewer script is lightweight and does not bundle heavy parsers
+    expect(jsText.length).toBeLessThan(20000);
+  });
+
+  test("GET /static/preview.js returns minified client preview script with 200 OK", async () => {
+    const res = await app.request("/static/preview.js");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toContain("application/javascript");
+    expect(res.headers.get("Cache-Control")).toContain("no-cache");
+    const jsText = await res.text();
+    expect(jsText.length).toBeGreaterThan(100);
+  });
+
+  test("SSR templates serve minified inline CSS without comments and whitespace", async () => {
+    // 1. Landing route
+    const res = await app.request("/");
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    const styleMatch = html.match(/<style>([\s\S]*?)<\/style>/);
+    expect(styleMatch).toBeTruthy();
+    const css = styleMatch?.[1] ?? "";
+    expect(css).not.toContain("/*");
+    expect(css).not.toContain("  ");
+    expect(css.length).toBeGreaterThan(1000);
+
+    // 2. Viewer route
+    const createRes = await app.request("/api/paste", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: "test minified css" }),
+    });
+    const { id } = (await createRes.json()) as { id: string };
+    const viewRes = await app.request(`/${id}`);
+    expect(viewRes.status).toBe(200);
+    const viewHtml = await viewRes.text();
+    const viewStyleMatch = viewHtml.match(/<style>([\s\S]*?)<\/style>/);
+    expect(viewStyleMatch).toBeTruthy();
+    const viewCss = viewStyleMatch?.[1] ?? "";
+    expect(viewCss).not.toContain("/*");
+    expect(viewCss).not.toContain("  ");
+    expect(viewCss.length).toBeGreaterThan(1000);
+
+    // 3. 404 Not Found route
+    const notFoundRes = await app.request("/nonexistent-paste-id");
+    expect(notFoundRes.status).toBe(404);
+    const notFoundHtml = await notFoundRes.text();
+    const notFoundStyleMatch = notFoundHtml.match(/<style>([\s\S]*?)<\/style>/);
+    expect(notFoundStyleMatch).toBeTruthy();
+    const notFoundCss = notFoundStyleMatch?.[1] ?? "";
+    expect(notFoundCss).not.toContain("/*");
+    expect(notFoundCss).not.toContain("  ");
+    expect(notFoundCss.length).toBeGreaterThan(500);
   });
 
   test("Server marked parser neutralizes javascript: URIs in markdown links", async () => {

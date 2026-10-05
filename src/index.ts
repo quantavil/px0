@@ -6,7 +6,11 @@ export { PasteStore } from "./paste-store";
 
 import { html, raw } from "hono/html";
 import landingJs from "../public/landing.js" with { type: "text" };
+import landingCss from "../public/landing.min.css" with { type: "text" };
+import notFoundCss from "../public/not-found.min.css" with { type: "text" };
+import previewJs from "../public/preview.js" with { type: "text" };
 import viewerJs from "../public/viewer.js" with { type: "text" };
+import viewerCss from "../public/viewer.min.css" with { type: "text" };
 import { formatTimeLeft } from "./client/shared";
 import {
   brandIcon,
@@ -26,14 +30,6 @@ import {
   trashIcon,
 } from "./icons";
 import { renderMarkdown } from "./server-renderer";
-import {
-  BASE_CSS,
-  CSS_VARIABLES,
-  LANDING_CSS,
-  MARKDOWN_CSS,
-  NOT_FOUND_CSS,
-  VIEWER_CSS,
-} from "./styles";
 import {
   ENC_PREFIX,
   generateShortId,
@@ -270,6 +266,7 @@ app.get("/favicon.ico", (c) => {
 for (const [path, script] of [
   ["landing", landingJs],
   ["viewer", viewerJs],
+  ["preview", previewJs],
 ]) {
   let etagPromise: Promise<string> | undefined;
   app.get(`/static/${path}.js`, async (c) => {
@@ -310,12 +307,7 @@ app.get("/", (c) => {
         <meta name="description" content="Minimalist markdown pastebin with zero-knowledge encryption and burn-after-read.">
         <title>px0 - Minimalist Markdown Pastebin</title>
         <link rel="icon" type="image/svg+xml" href="/favicon.ico">
-        <style>
-          ${raw(CSS_VARIABLES)}
-          ${raw(BASE_CSS)}
-          ${raw(MARKDOWN_CSS)}
-          ${raw(LANDING_CSS)}
-        </style>
+        <style>${raw(landingCss)}</style>
       </head>
       <body>
         <form id="pasteForm">
@@ -572,11 +564,7 @@ app.get("/:id", async (c) => {
           <meta name="theme-color" content="#050505">
           <title>404 - Paste Unavailable | px0</title>
           <link rel="icon" type="image/svg+xml" href="/favicon.ico">
-          <style>
-          ${raw(CSS_VARIABLES)}
-          ${raw(BASE_CSS)}
-          ${raw(NOT_FOUND_CSS)}
-        </style>
+          <style>${raw(notFoundCss)}</style>
         </head>
         <body>
           <header>
@@ -618,11 +606,7 @@ app.get("/:id", async (c) => {
           <meta name="theme-color" content="#050505">
           <title>Burn-After-Read Paste | px0</title>
           <link rel="icon" type="image/svg+xml" href="/favicon.ico">
-          <style>
-            ${raw(CSS_VARIABLES)}
-            ${raw(BASE_CSS)}
-            ${raw(NOT_FOUND_CSS)}
-          </style>
+          <style>${raw(notFoundCss)}</style>
         </head>
         <body>
           <header>
@@ -693,12 +677,7 @@ app.get("/:id", async (c) => {
         <meta name="description" content="Minimalist markdown pastebin with zero-knowledge encryption and burn-after-read.">
         <title>Paste ${id} - px0</title>
         <link rel="icon" type="image/svg+xml" href="/favicon.ico">
-        <style>
-          ${raw(CSS_VARIABLES)}
-          ${raw(BASE_CSS)}
-          ${raw(MARKDOWN_CSS)}
-          ${raw(VIEWER_CSS)}
-        </style>
+        <style>${raw(viewerCss)}</style>
       </head>
       <body>
         <header>

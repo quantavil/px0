@@ -1,11 +1,10 @@
 import { clockSvg, copyIcon, lockIcon } from "../icons";
-import { ENC_PREFIX } from "../utils";
+import { ENC_PREFIX, MAX_RENDER_CHARS } from "../utils";
 import {
   base64UrlToBytes,
   copyToClipboard,
   flashCopied,
   formatTimeLeft,
-  renderMarkdown,
 } from "./shared";
 
 declare global {
@@ -298,6 +297,7 @@ async function initPageViewer() {
     return;
   }
 
+  let plaintext = "";
   try {
     const keyBytes = base64UrlToBytes(secretKeyBase64);
     const cryptoKey = await crypto.subtle.importKey(
@@ -318,16 +318,41 @@ async function initPageViewer() {
       ciphertext,
     );
     if (generation !== decryptGeneration) return;
-    const plaintext = new TextDecoder().decode(decrypted);
+    plaintext = new TextDecoder().decode(decrypted);
 
     window.__PX0_DECRYPTED_TEXT__ = plaintext;
-
-    outputEl.innerHTML = renderMarkdown(plaintext);
-    revealPasteActions();
-    attachCodeBlockCopyButtons();
   } catch {
     if (generation !== decryptGeneration) return;
     showUnlockCard(outputEl, true);
+    return;
+  }
+
+  revealPasteActions();
+
+  try {
+    const { renderMarkdown } = await import("/static/preview.js");
+    if (generation !== decryptGeneration) return;
+
+    outputEl.innerHTML = renderMarkdown(plaintext);
+    attachCodeBlockCopyButtons();
+  } catch (err) {
+    if (generation !== decryptGeneration) return;
+    console.error("Failed to load preview renderer:", err);
+    outputEl.innerHTML = "";
+    if (plaintext.length > MAX_RENDER_CHARS) {
+      const note = document.createElement("p");
+      note.className = "large-paste-note";
+      note.textContent =
+        "Large paste — showing the first 20,000 characters as text. Copy or download to get the complete paste.";
+      outputEl.appendChild(note);
+    }
+    const pre = document.createElement("pre");
+    pre.className = "large-paste-excerpt";
+    const code = document.createElement("code");
+    code.textContent = plaintext.slice(0, MAX_RENDER_CHARS);
+    pre.appendChild(code);
+    outputEl.appendChild(pre);
+    attachCodeBlockCopyButtons();
   }
 }
 

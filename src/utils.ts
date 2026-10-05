@@ -4,6 +4,7 @@ export const ENC_PREFIX = "__PX0_ENC__:";
 
 export const THIRTY_DAYS_IN_SECONDS = 30 * 24 * 60 * 60; // 2,592,000 seconds
 export const MAX_PASTE_BYTES = 5 * 1024 * 1024; // 5MB limit
+export const MAX_RENDER_CHARS = 20000;
 
 export const TTL_MAP: Record<string, number> = {
   "15m": 15 * 60,

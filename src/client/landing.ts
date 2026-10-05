@@ -9,12 +9,7 @@ import {
   plusIcon,
 } from "../icons";
 import { ENC_PREFIX, MAX_PASTE_BYTES } from "../utils";
-import {
-  bytesToBase64Url,
-  copyToClipboard,
-  flashCopied,
-  renderMarkdown,
-} from "./shared";
+import { bytesToBase64Url, copyToClipboard, flashCopied } from "./shared";
 
 function initLanding() {
   const textarea = document.getElementById(
@@ -182,14 +177,51 @@ function initLanding() {
     return e2eeToggle?.checked ?? false;
   }
 
-  function renderLivePreview() {
+  type RenderFn = (md: string) => string;
+  let previewRendererPromise: Promise<RenderFn> | null = null;
+
+  function loadPreviewRenderer(): Promise<RenderFn> {
+    if (!previewRendererPromise) {
+      previewRendererPromise = import("/static/preview.js")
+        .then((mod) => mod.renderMarkdown)
+        .catch((err) => {
+          previewRendererPromise = null;
+          throw err;
+        });
+    }
+    return previewRendererPromise;
+  }
+
+  let renderGeneration = 0;
+  async function renderLivePreview() {
     if (
       !previewPane ||
       !textarea ||
       !editorContainer?.classList.contains("split-active")
     )
       return;
-    previewPane.innerHTML = renderMarkdown(textarea.value);
+    const currentGen = ++renderGeneration;
+    const text = textarea.value;
+    try {
+      const render = await loadPreviewRenderer();
+      if (
+        currentGen !== renderGeneration ||
+        !editorContainer?.classList.contains("split-active")
+      ) {
+        return;
+      }
+      previewPane.innerHTML = render(text);
+    } catch (err) {
+      console.error("Failed to render preview:", err);
+      if (
+        currentGen === renderGeneration &&
+        editorContainer?.classList.contains("split-active") &&
+        !previewPane.innerHTML.trim()
+      ) {
+        previewPane.innerHTML =
+          '<p class="large-paste-note">Preview could not be loaded. Check your connection.</p>';
+      }
+    }
   }
 
   // A full marked re-parse per keystroke gets expensive fast on a large paste;
@@ -201,6 +233,16 @@ function initLanding() {
   }
 
   if (btnSplit && editorContainer) {
+    const prefetchPreview = () => {
+      loadPreviewRenderer().catch(() => {});
+    };
+    btnSplit.addEventListener("mouseenter", prefetchPreview, { once: true });
+    btnSplit.addEventListener("focus", prefetchPreview, { once: true });
+    btnSplit.addEventListener("touchstart", prefetchPreview, {
+      passive: true,
+      once: true,
+    });
+
     btnSplit.addEventListener("click", () => {
       clearTimeout(previewTimer);
       const isSplit = editorContainer.classList.toggle("split-active");
@@ -273,15 +315,15 @@ function initLanding() {
     clearTimeout(draftTimer);
     if (!textarea || !draftDirty || draftPreference?.checked === false) return;
     try {
-      if (textarea.value.trim()) {
-        localStorage.setItem("px0_draft", textarea.value);
+      const val = textarea.value;
+      const trimmed = val.trim();
+      if (trimmed) {
+        localStorage.setItem("px0_draft", val);
       } else {
         localStorage.removeItem("px0_draft");
       }
       draftDirty = false;
-      showDraftStatus(
-        textarea.value.trim() ? "Draft saved on this device" : "",
-      );
+      showDraftStatus(trimmed ? "Draft saved on this device" : "");
     } catch {
       showDraftStatus("Draft could not be saved on this device");
     }

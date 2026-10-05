@@ -1,9 +1,6 @@
 import sanitize from "sanitize-html";
-import {
-  isDangerousSrcset,
-  isDangerousUrl,
-  renderMarkdown as render,
-} from "./client/shared";
+import { renderMarkdown as render } from "./client/preview";
+import { isDangerousSrcset, isDangerousUrl } from "./client/shared";
 
 // A real HTML parser handles malformed markup on the Worker, where DOMPurify
 // has no DOM. The browser continues to use DOMPurify; neither ships the other's

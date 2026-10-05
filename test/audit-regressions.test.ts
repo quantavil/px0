@@ -67,6 +67,15 @@ test("scripts can revalidate cached copies without caching private pastes", asyn
     headers: { "If-None-Match": etag ?? "" },
   });
   expect(second.status).toBe(304);
+
+  const previewFirst = await app.request("/static/preview.js");
+  const previewEtag = previewFirst.headers.get("etag");
+  expect(previewEtag).toBeTruthy();
+  const previewSecond = await app.request("/static/preview.js", {
+    headers: { "If-None-Match": previewEtag ?? "" },
+  });
+  expect(previewSecond.status).toBe(304);
+
   const { id } = await create("private text");
   expect((await app.request(`/${id}`)).headers.get("cache-control")).toBe(
     "no-store",
