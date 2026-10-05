@@ -43,6 +43,27 @@ function initLanding() {
   const ttlInput = document.getElementById(
     "ttlInput",
   ) as HTMLInputElement | null;
+  const btnUpload = document.getElementById(
+    "btnUpload",
+  ) as HTMLButtonElement | null;
+  const imageInput = document.getElementById(
+    "imageInput",
+  ) as HTMLInputElement | null;
+  const btnUploadInfo = document.getElementById(
+    "btnUploadInfo",
+  ) as HTMLButtonElement | null;
+  const imagePopover = document.getElementById(
+    "imagePopover",
+  ) as HTMLDivElement | null;
+  const uploadStatus = document.getElementById(
+    "uploadStatus",
+  ) as HTMLSpanElement | null;
+  const uploadControlGroup = document.querySelector(
+    ".upload-control-group",
+  ) as HTMLElement | null;
+  const saveError = document.getElementById(
+    "saveError",
+  ) as HTMLSpanElement | null;
 
   function closeTtlMenu() {
     if (!ttlMenu || !ttlTrigger) return;
@@ -310,6 +331,7 @@ function initLanding() {
   let draftTimer: ReturnType<typeof setTimeout> | undefined;
 
   let draftDirty = false;
+  let currentDraftGen = 0;
 
   function saveDraft() {
     clearTimeout(draftTimer);
@@ -346,6 +368,7 @@ function initLanding() {
     if (!textarea) return;
     e.preventDefault();
     clearTimeout(draftTimer);
+    currentDraftGen++;
     const previous = textarea.value;
     try {
       previousDraft = previous;
@@ -379,6 +402,7 @@ function initLanding() {
       restore.className = "draft-discard";
       restore.textContent = "Restore previous draft";
       restore.addEventListener("click", () => {
+        currentDraftGen++;
         const current = textarea.value;
         textarea.value = previous;
         previousDraft = current;
@@ -423,6 +447,7 @@ function initLanding() {
             ?.addEventListener("click", () => {
               clearTimeout(draftTimer);
               draftDirty = false;
+              currentDraftGen++;
               try {
                 localStorage.removeItem("px0_draft");
               } catch {}
@@ -513,7 +538,288 @@ function initLanding() {
     }
   }
 
+  let uploadInProgress = false;
+
+  async function handleFilesUpload(files: File[]) {
+    if (uploadInProgress) {
+      if (saveError) saveError.textContent = "Upload already in progress.";
+      return;
+    }
+    if (!files.length) return;
+
+    const thisDraftGen = currentDraftGen;
+    uploadInProgress = true;
+    if (btnUpload) btnUpload.disabled = true;
+    if (saveError) saveError.textContent = "";
+
+    try {
+      for (let i = 0; i < files.length; i++) {
+        if (thisDraftGen !== currentDraftGen) break;
+        const file = files[i];
+
+        if (uploadStatus) {
+          uploadStatus.textContent =
+            files.length > 1
+              ? `Uploading image ${i + 1}/${files.length}…`
+              : "Uploading image…";
+        }
+
+        // 5 MiB client-side validation
+        if (file.size > 5 * 1024 * 1024) {
+          if (saveError) {
+            saveError.textContent = `"${file.name || "Image"}" exceeds 5MB limit.`;
+          }
+          continue;
+        }
+
+        // Format validation (PNG, JPEG, WebP, GIF only)
+        const allowedExtensions = /\.(png|jpe?g|webp|gif)$/i;
+        const allowedMimes = [
+          "image/png",
+          "image/jpeg",
+          "image/webp",
+          "image/gif",
+        ];
+        const isAllowed =
+          allowedMimes.includes(file.type.toLowerCase()) ||
+          allowedExtensions.test(file.name);
+
+        if (!isAllowed) {
+          if (saveError) {
+            saveError.textContent = `"${file.name || "File"}" is not a supported format (PNG, JPEG, WebP, GIF only).`;
+          }
+          continue;
+        }
+
+        const formData = new FormData();
+        formData.append("file", file, file.name || "image.png");
+
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 30000);
+
+        let res: Response;
+        let data: { url?: string; error?: string };
+        try {
+          res = await fetch("/api/image", {
+            method: "POST",
+            body: formData,
+            signal: controller.signal,
+          });
+          data = (await res.json().catch(() => ({}))) as {
+            url?: string;
+            error?: string;
+          };
+        } catch {
+          clearTimeout(timeout);
+          if (thisDraftGen === currentDraftGen && saveError) {
+            saveError.textContent = controller.signal.aborted
+              ? `Upload timed out for "${file.name || "image"}".`
+              : `Network error uploading "${file.name || "image"}".`;
+          }
+          break;
+        } finally {
+          clearTimeout(timeout);
+        }
+
+        if (thisDraftGen !== currentDraftGen) break;
+
+        if (!res.ok || !data.url) {
+          if (saveError) {
+            saveError.textContent =
+              data.error || `Upload failed for "${file.name || "image"}".`;
+          }
+          continue;
+        }
+
+        if (textarea) {
+          const cleanName =
+            (file.name || "image")
+              .replace(/\.[^/.]+$/, "")
+              .replace(/[[\]\\]/g, "")
+              .trim() || "image";
+
+          const val = textarea.value;
+          const start = textarea.selectionStart;
+          const end = textarea.selectionEnd;
+
+          const prefix = start > 0 && val[start - 1] !== "\n" ? "\n" : "";
+          const suffix = end < val.length && val[end] !== "\n" ? "\n" : "\n";
+          const mdLink = `${prefix}![${cleanName}](${data.url})${suffix}`;
+
+          replaceText(start, end, mdLink);
+          updateStats();
+          scheduleDraftSave();
+        }
+
+        if (uploadStatus) {
+          uploadStatus.textContent =
+            files.length > 1
+              ? `Uploaded ${i + 1}/${files.length}`
+              : "Image uploaded";
+        }
+      }
+    } finally {
+      uploadInProgress = false;
+      if (btnUpload) btnUpload.disabled = false;
+      if (imageInput) imageInput.value = "";
+      setTimeout(() => {
+        if (
+          uploadStatus &&
+          (uploadStatus.textContent?.startsWith("Uploaded") ||
+            uploadStatus.textContent === "Image uploaded")
+        ) {
+          uploadStatus.textContent = "";
+        }
+      }, 4000);
+    }
+  }
+
+  if (btnUpload && imageInput) {
+    btnUpload.addEventListener("click", () => {
+      imageInput.click();
+    });
+
+    imageInput.addEventListener("change", () => {
+      const files = Array.from(imageInput.files || []);
+      if (files.length > 0) {
+        handleFilesUpload(files);
+      }
+    });
+  }
+
+  if (btnUploadInfo && imagePopover) {
+    btnUploadInfo.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const isOpen = !imagePopover.hidden;
+      imagePopover.hidden = isOpen;
+      btnUploadInfo.setAttribute("aria-expanded", String(!isOpen));
+      btnUploadInfo.classList.toggle("open", !isOpen);
+    });
+
+    document.addEventListener("click", (e) => {
+      if (
+        !imagePopover.hidden &&
+        !uploadControlGroup?.contains(e.target as Node)
+      ) {
+        imagePopover.hidden = true;
+        btnUploadInfo.setAttribute("aria-expanded", "false");
+        btnUploadInfo.classList.remove("open");
+      }
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !imagePopover.hidden) {
+        imagePopover.hidden = true;
+        btnUploadInfo.setAttribute("aria-expanded", "false");
+        btnUploadInfo.classList.remove("open");
+        btnUploadInfo.focus();
+      }
+    });
+  }
+
+  if (editorContainer) {
+    let dragCounter = 0;
+    editorContainer.addEventListener("dragenter", (e) => {
+      e.preventDefault();
+      dragCounter++;
+      if (e.dataTransfer?.types.includes("Files")) {
+        editorContainer.classList.add("drag-over");
+      }
+    });
+
+    editorContainer.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      if (e.dataTransfer) {
+        e.dataTransfer.dropEffect = "copy";
+      }
+    });
+
+    editorContainer.addEventListener("dragleave", (e) => {
+      e.preventDefault();
+      dragCounter = Math.max(0, dragCounter - 1);
+      if (dragCounter === 0) {
+        editorContainer.classList.remove("drag-over");
+      }
+    });
+
+    editorContainer.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dragCounter = 0;
+      editorContainer.classList.remove("drag-over");
+
+      if (
+        textarea &&
+        typeof e.clientX === "number" &&
+        typeof e.clientY === "number"
+      ) {
+        const doc = document as unknown as {
+          caretPositionFromPoint?: (
+            x: number,
+            y: number,
+          ) => { offset: number; offsetNode: Node } | null;
+          caretRangeFromPoint?: (x: number, y: number) => Range | null;
+        };
+        if (doc.caretPositionFromPoint) {
+          const pos = doc.caretPositionFromPoint(e.clientX, e.clientY);
+          if (pos && pos.offsetNode === textarea) {
+            textarea.setSelectionRange(pos.offset, pos.offset);
+          }
+        } else if (doc.caretRangeFromPoint) {
+          const range = doc.caretRangeFromPoint(e.clientX, e.clientY);
+          if (range) {
+            const offset = range.startOffset;
+            textarea.setSelectionRange(offset, offset);
+          }
+        }
+      }
+
+      const rawFiles = Array.from(e.dataTransfer?.files || []);
+      const imageFiles = rawFiles.filter(
+        (f) =>
+          f.type.startsWith("image/") ||
+          /\.(png|jpe?g|webp|gif)$/i.test(f.name),
+      );
+      if (imageFiles.length > 0) {
+        handleFilesUpload(imageFiles);
+      }
+    });
+  }
+
   if (textarea) {
+    textarea.addEventListener("paste", (e) => {
+      const clipboardData = e.clipboardData;
+      if (!clipboardData) return;
+
+      const rawFiles = Array.from(clipboardData.files || []);
+      const imageFiles = rawFiles.filter(
+        (f) =>
+          f.type.startsWith("image/") ||
+          /\.(png|jpe?g|webp|gif)$/i.test(f.name),
+      );
+
+      const text = clipboardData.getData("text/plain");
+
+      if (imageFiles.length > 0 && !text) {
+        e.preventDefault();
+        handleFilesUpload(imageFiles);
+        return;
+      }
+
+      const itemFiles: File[] = [];
+      for (const item of Array.from(clipboardData.items || [])) {
+        if (item.kind === "file" && item.type.startsWith("image/")) {
+          const f = item.getAsFile();
+          if (f) itemFiles.push(f);
+        }
+      }
+
+      if (itemFiles.length > 0 && !text) {
+        e.preventDefault();
+        handleFilesUpload(itemFiles);
+        return;
+      }
+    });
+
     textarea.addEventListener("input", () => {
       scheduleStats();
       scheduleDraftSave();
@@ -573,9 +879,6 @@ function initLanding() {
   }
 
   const form = document.getElementById("pasteForm") as HTMLFormElement | null;
-  const saveError = document.getElementById(
-    "saveError",
-  ) as HTMLSpanElement | null;
   let isSubmitting = false;
 
   if (form) {

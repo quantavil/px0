@@ -230,6 +230,43 @@ try {
       assert.equal(response.status, 413);
     },
   );
+  await check(
+    "oversized streaming image bodies without Content-Length are rejected on /api/image",
+    async () => {
+      let remaining = 8 * 1024 * 1024;
+      const body = new ReadableStream({
+        pull(controller) {
+          if (!remaining) {
+            controller.close();
+            return;
+          }
+          const n = Math.min(65536, remaining);
+          remaining -= n;
+          controller.enqueue(new Uint8Array(n).fill(120));
+        },
+      });
+      const response = await request("/api/image", {
+        method: "POST",
+        headers: { "Content-Type": "image/png" },
+        body,
+        duplex: "half",
+      });
+      assert.equal(response.status, 413);
+    },
+  );
+  await check(
+    "/api/image rejects SVG files with 400 in worker environment",
+    async () => {
+      const response = await request("/api/image", {
+        method: "POST",
+        headers: { "Content-Type": "image/svg+xml" },
+        body: '<svg xmlns="http://www.w3.org/2000/svg"><circle r="5"/></svg>',
+      });
+      assert.equal(response.status, 400);
+      const json = await response.json();
+      assert.match(json.error, /Invalid image format/);
+    },
+  );
   console.log(`${checks} Worker integration checks passed`);
 } finally {
   await worker.dispose();

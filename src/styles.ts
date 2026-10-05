@@ -661,6 +661,81 @@ export const LANDING_CSS = `
     height: 30px;
   }
 
+  .util-right {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    position: relative;
+  }
+
+  .upload-control-group {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  .btn-upload-info {
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    opacity: 0.65;
+    transition: opacity 0.2s ease, color 0.2s ease;
+  }
+
+  .btn-upload-info:hover, .btn-upload-info:focus-visible, .btn-upload-info.open {
+    opacity: 1;
+    color: var(--amber);
+  }
+
+  .image-popover {
+    position: absolute;
+    top: calc(100% + 0.4rem);
+    right: 0;
+    z-index: 60;
+    width: 290px;
+    padding: 0.75rem 0.85rem;
+    background: var(--surface);
+    border: 1px solid var(--border-hover);
+    border-radius: var(--radius);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.65);
+    font-size: 0.74rem;
+    line-height: 1.45;
+    color: var(--text-muted);
+  }
+
+  .image-popover[hidden] {
+    display: none;
+  }
+
+  .image-popover p {
+    margin: 0;
+  }
+
+  .image-popover p + p {
+    margin-top: 0.4rem;
+  }
+
+  .image-popover strong {
+    color: var(--amber);
+  }
+
+  .upload-status {
+    font-size: 0.75rem;
+    font-family: var(--mono);
+    color: var(--amber);
+  }
+
+  .upload-status:empty {
+    display: none;
+  }
+
+  .editor-container.drag-over {
+    outline: 2px dashed var(--amber);
+    outline-offset: -4px;
+    background: rgba(210, 153, 34, 0.04);
+  }
+
   /* Plaintext/E2EE segmented control with a sliding thumb. */
   .mode-seg {
     position: relative;
