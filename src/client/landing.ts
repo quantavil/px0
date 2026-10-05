@@ -65,6 +65,23 @@ function initLanding() {
     "saveError",
   ) as HTMLSpanElement | null;
 
+  let uploadStatusTimer: ReturnType<typeof setTimeout> | undefined;
+
+  function clearUploadStatus() {
+    clearTimeout(uploadStatusTimer);
+    if (uploadStatus) uploadStatus.textContent = "";
+  }
+
+  function setUploadStatus(text: string, autoClearMs = 0) {
+    clearTimeout(uploadStatusTimer);
+    if (uploadStatus) uploadStatus.textContent = text;
+    if (autoClearMs > 0) {
+      uploadStatusTimer = setTimeout(() => {
+        if (uploadStatus) uploadStatus.textContent = "";
+      }, autoClearMs);
+    }
+  }
+
   function closeTtlMenu() {
     if (!ttlMenu || !ttlTrigger) return;
     ttlMenu.hidden = true;
@@ -381,6 +398,7 @@ function initLanding() {
     }
     draftDirty = false;
     textarea.value = "";
+    clearUploadStatus();
     updateStats();
     showDraftStatus("");
     showPreviousDraft();
@@ -406,6 +424,7 @@ function initLanding() {
         const current = textarea.value;
         textarea.value = previous;
         previousDraft = current;
+        clearUploadStatus();
         try {
           if (current.trim() && draftPreference?.checked !== false)
             localStorage.setItem("px0_previous_draft", current);
@@ -452,6 +471,7 @@ function initLanding() {
                 localStorage.removeItem("px0_draft");
               } catch {}
               if (textarea) textarea.value = "";
+              clearUploadStatus();
               updateStats();
               showDraftStatus("");
               if (draftContainer) draftContainer.innerHTML = "";
@@ -551,18 +571,20 @@ function initLanding() {
     uploadInProgress = true;
     if (btnUpload) btnUpload.disabled = true;
     if (saveError) saveError.textContent = "";
+    clearUploadStatus();
+
+    let successfulUploads = 0;
 
     try {
       for (let i = 0; i < files.length; i++) {
         if (thisDraftGen !== currentDraftGen) break;
         const file = files[i];
 
-        if (uploadStatus) {
-          uploadStatus.textContent =
-            files.length > 1
-              ? `Uploading image ${i + 1}/${files.length}…`
-              : "Uploading image…";
-        }
+        setUploadStatus(
+          files.length > 1
+            ? `Uploading image ${i + 1}/${files.length}…`
+            : "Uploading image…",
+        );
 
         // 5 MiB client-side validation
         if (file.size > 5 * 1024 * 1024) {
@@ -636,6 +658,7 @@ function initLanding() {
             (file.name || "image")
               .replace(/\.[^/.]+$/, "")
               .replace(/[[\]\\]/g, "")
+              .replace(/[\r\n\t]/g, " ")
               .trim() || "image";
 
           const val = textarea.value;
@@ -643,7 +666,7 @@ function initLanding() {
           const end = textarea.selectionEnd;
 
           const prefix = start > 0 && val[start - 1] !== "\n" ? "\n" : "";
-          const suffix = end < val.length && val[end] !== "\n" ? "\n" : "\n";
+          const suffix = end < val.length && val[end] === "\n" ? "" : "\n";
           const mdLink = `${prefix}![${cleanName}](${data.url})${suffix}`;
 
           replaceText(start, end, mdLink);
@@ -651,26 +674,27 @@ function initLanding() {
           scheduleDraftSave();
         }
 
-        if (uploadStatus) {
-          uploadStatus.textContent =
-            files.length > 1
-              ? `Uploaded ${i + 1}/${files.length}`
-              : "Image uploaded";
+        successfulUploads++;
+        if (files.length > 1) {
+          setUploadStatus(`Uploaded ${successfulUploads}/${files.length}`);
         }
       }
     } finally {
       uploadInProgress = false;
       if (btnUpload) btnUpload.disabled = false;
       if (imageInput) imageInput.value = "";
-      setTimeout(() => {
-        if (
-          uploadStatus &&
-          (uploadStatus.textContent?.startsWith("Uploaded") ||
-            uploadStatus.textContent === "Image uploaded")
-        ) {
-          uploadStatus.textContent = "";
-        }
-      }, 4000);
+      if (thisDraftGen !== currentDraftGen) {
+        clearUploadStatus();
+      } else if (successfulUploads > 0) {
+        setUploadStatus(
+          files.length > 1
+            ? `Uploaded ${successfulUploads}/${files.length}`
+            : "Image uploaded",
+          4000,
+        );
+      } else {
+        clearUploadStatus();
+      }
     }
   }
 
@@ -720,29 +744,36 @@ function initLanding() {
   if (editorContainer) {
     let dragCounter = 0;
     editorContainer.addEventListener("dragenter", (e) => {
-      e.preventDefault();
-      dragCounter++;
       if (e.dataTransfer?.types.includes("Files")) {
+        e.preventDefault();
+        dragCounter++;
         editorContainer.classList.add("drag-over");
       }
     });
 
     editorContainer.addEventListener("dragover", (e) => {
-      e.preventDefault();
-      if (e.dataTransfer) {
+      if (e.dataTransfer?.types.includes("Files")) {
+        e.preventDefault();
         e.dataTransfer.dropEffect = "copy";
       }
     });
 
     editorContainer.addEventListener("dragleave", (e) => {
-      e.preventDefault();
-      dragCounter = Math.max(0, dragCounter - 1);
-      if (dragCounter === 0) {
-        editorContainer.classList.remove("drag-over");
+      if (e.dataTransfer?.types.includes("Files")) {
+        e.preventDefault();
+        dragCounter = Math.max(0, dragCounter - 1);
+        if (dragCounter === 0) {
+          editorContainer.classList.remove("drag-over");
+        }
       }
     });
 
     editorContainer.addEventListener("drop", (e) => {
+      if (!e.dataTransfer?.types.includes("Files")) {
+        dragCounter = 0;
+        editorContainer.classList.remove("drag-over");
+        return;
+      }
       e.preventDefault();
       dragCounter = 0;
       editorContainer.classList.remove("drag-over");
@@ -774,13 +805,8 @@ function initLanding() {
       }
 
       const rawFiles = Array.from(e.dataTransfer?.files || []);
-      const imageFiles = rawFiles.filter(
-        (f) =>
-          f.type.startsWith("image/") ||
-          /\.(png|jpe?g|webp|gif)$/i.test(f.name),
-      );
-      if (imageFiles.length > 0) {
-        handleFilesUpload(imageFiles);
+      if (rawFiles.length > 0) {
+        handleFilesUpload(rawFiles);
       }
     });
   }
@@ -797,26 +823,32 @@ function initLanding() {
           /\.(png|jpe?g|webp|gif)$/i.test(f.name),
       );
 
-      const text = clipboardData.getData("text/plain");
-
-      if (imageFiles.length > 0 && !text) {
-        e.preventDefault();
-        handleFilesUpload(imageFiles);
-        return;
-      }
-
-      const itemFiles: File[] = [];
-      for (const item of Array.from(clipboardData.items || [])) {
-        if (item.kind === "file" && item.type.startsWith("image/")) {
-          const f = item.getAsFile();
-          if (f) itemFiles.push(f);
+      if (imageFiles.length === 0 && clipboardData.items) {
+        for (const item of Array.from(clipboardData.items)) {
+          if (item.kind === "file" && item.type.startsWith("image/")) {
+            const f = item.getAsFile();
+            if (f) imageFiles.push(f);
+          }
         }
       }
 
-      if (itemFiles.length > 0 && !text) {
-        e.preventDefault();
-        handleFilesUpload(itemFiles);
-        return;
+      if (imageFiles.length > 0) {
+        const text = clipboardData.getData("text/plain").trim();
+        const isFilenameOrUri =
+          Boolean(imageFiles[0].name) &&
+          (text === imageFiles[0].name ||
+            decodeURIComponent(text).endsWith(imageFiles[0].name) ||
+            text.startsWith("file://"));
+
+        if (
+          !text ||
+          isFilenameOrUri ||
+          !clipboardData.types.includes("text/plain")
+        ) {
+          e.preventDefault();
+          handleFilesUpload(imageFiles);
+          return;
+        }
       }
     });
 
@@ -895,6 +927,13 @@ function initLanding() {
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       if (isSubmitting || form.inert || !textarea || !e2eeToggle) return;
+      if (uploadInProgress) {
+        if (saveError) {
+          saveError.textContent =
+            "Please wait for image upload to complete before saving.";
+        }
+        return;
+      }
 
       const saveBtn = document.getElementById(
         "saveBtn",

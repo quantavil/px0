@@ -694,6 +694,8 @@ export const LANDING_CSS = `
     right: 0;
     z-index: 60;
     width: 290px;
+    max-width: min(290px, calc(100vw - 1.5rem));
+    box-sizing: border-box;
     padding: 0.75rem 0.85rem;
     background: var(--surface);
     border: 1px solid var(--border-hover);

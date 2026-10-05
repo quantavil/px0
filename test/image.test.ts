@@ -171,6 +171,86 @@ describe("POST /api/image Endpoint", () => {
     expect(json.url).toBe("https://files.catbox.moe/6k4v9x.png");
   });
 
+  test("accepts fileToUpload multipart form field name", async () => {
+    mockFetch(async () => {
+      return new Response("https://files.catbox.moe/field1.png", {
+        status: 200,
+        headers: { "Content-Type": "text/plain" },
+      });
+    });
+
+    const formData = new FormData();
+    formData.append(
+      "fileToUpload",
+      new Blob([pngBytes as unknown as BlobPart], { type: "image/png" }),
+      "test.png",
+    );
+
+    const res = await app.request("/api/image", {
+      method: "POST",
+      body: formData,
+    });
+
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as { url: string };
+    expect(json.url).toBe("https://files.catbox.moe/field1.png");
+  });
+
+  test("rejects empty 0-byte image with 400 Bad Request", async () => {
+    const formData = new FormData();
+    formData.append("file", new Blob([], { type: "image/png" }), "empty.png");
+
+    const res = await app.request("/api/image", {
+      method: "POST",
+      body: formData,
+    });
+
+    expect(res.status).toBe(400);
+    const json = (await res.json()) as { error: string };
+    expect(json.error).toContain("empty");
+  });
+
+  test("handles client abort by terminating upstream fetch", async () => {
+    let upstreamAborted = false;
+    mockFetch(async (_input, init) => {
+      return new Promise((_resolve, reject) => {
+        if (init?.signal?.aborted) {
+          upstreamAborted = true;
+          reject(new Error("aborted"));
+        } else {
+          init?.signal?.addEventListener("abort", () => {
+            upstreamAborted = true;
+            reject(new Error("aborted"));
+          });
+        }
+      });
+    });
+
+    const formData = new FormData();
+    formData.append(
+      "file",
+      new Blob([pngBytes as unknown as BlobPart], { type: "image/png" }),
+      "test.png",
+    );
+
+    const abortController = new AbortController();
+    const reqPromise = app.request("/api/image", {
+      method: "POST",
+      body: formData,
+      signal: abortController.signal,
+    });
+
+    // Abort client request while in-flight
+    abortController.abort();
+    try {
+      await reqPromise;
+    } catch {
+      // In fetch runtimes, client abort rejects the request promise
+    }
+
+    expect(upstreamAborted).toBe(true);
+  });
+
   test("uploads valid JPEG via binary raw body and returns verified Catbox URL", async () => {
     mockFetch(async () => {
       return new Response("https://files.catbox.moe/998877.jpg", {

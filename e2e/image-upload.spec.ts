@@ -202,11 +202,16 @@ test.describe("Catbox Image Upload & Integration", () => {
     const saveError = page.locator("#saveError");
     await expect(saveError).toContainText("Failed to connect to image host");
 
+    // uploadStatus must NOT be stuck on "Uploading image…"
+    await expect(page.locator("#uploadStatus")).toHaveText("");
+
     // Existing text must be 100% intact
     await expect(editor).toHaveValue("Preserve this precious text");
   });
 
-  test("late upload responses do not modify a new/different draft", async ({ page }) => {
+  test("late upload responses do not modify a new/different draft and clear uploadStatus", async ({
+    page,
+  }) => {
     await page.goto("/");
 
     let fulfillUpload: (() => void) | null = null;
@@ -234,6 +239,7 @@ test.describe("Catbox Image Upload & Integration", () => {
     // User starts a New Paste while upload is in flight
     await page.locator('header a[title="New Paste"]').click();
     await expect(editor).toHaveValue("");
+    await expect(page.locator("#uploadStatus")).toHaveText("");
 
     // Now resolve the late upload
     if (fulfillUpload) (fulfillUpload as () => void)();
@@ -242,6 +248,95 @@ test.describe("Catbox Image Upload & Integration", () => {
 
     // Editor should still be empty! Late response must not inject into the new draft
     await expect(editor).toHaveValue("");
+    await expect(page.locator("#uploadStatus")).toHaveText("");
+  });
+
+  test("saving paste is blocked with warning while image upload is in progress", async ({
+    page,
+  }) => {
+    await page.goto("/");
+
+    let fulfillUpload: (() => void) | null = null;
+    await page.route("**/api/image", async (route) => {
+      await new Promise<void>((resolve) => {
+        fulfillUpload = resolve;
+      });
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ url: "https://files.catbox.moe/slow.png" }),
+      });
+    });
+
+    const editor = page.locator("#content");
+    await editor.fill("Draft awaiting image upload");
+
+    const fileInput = page.locator("#imageInput");
+    await fileInput.setInputFiles({
+      name: "slow.png",
+      mimeType: "image/png",
+      buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47]),
+    });
+
+    // Try to save before image upload completes
+    await page.locator("#saveBtn").click();
+
+    // Verify understandable warning is shown and paste was NOT submitted (no success modal)
+    await expect(page.locator("#saveError")).toContainText("Please wait for image upload to complete");
+    await expect(page.locator("#pxModalOverlay")).toBeHidden();
+
+    // Now resolve the upload
+    if (fulfillUpload) (fulfillUpload as () => void)();
+    await expect(editor).toHaveValue(/!\[slow\]\(https:\/\/files\.catbox\.moe\/slow\.png\)/);
+  });
+
+  test("dragging and dropping an unsupported file shows understandable error", async ({
+    page,
+  }) => {
+    await page.goto("/");
+
+    await page.evaluate(() => {
+      const container = document.getElementById("editorContainer")!;
+      const dt = new DataTransfer();
+      const file = new File(["not an image"], "document.pdf", {
+        type: "application/pdf",
+      });
+      dt.items.add(file);
+      container.dispatchEvent(new DragEvent("drop", { dataTransfer: dt, bubbles: true }));
+    });
+
+    const saveError = page.locator("#saveError");
+    await expect(saveError).toContainText("not a supported format");
+  });
+
+  test("pasting clipboard image with auxiliary filename text in text/plain still uploads", async ({
+    page,
+  }) => {
+    await page.goto("/");
+
+    await page.route("**/api/image", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ url: "https://files.catbox.moe/fromfilemanager.png" }),
+      });
+    });
+
+    const editor = page.locator("#content");
+    await editor.focus();
+
+    await page.evaluate(() => {
+      const ta = document.getElementById("content") as HTMLTextAreaElement;
+      const dt = new DataTransfer();
+      const file = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], "screenshot.png", {
+        type: "image/png",
+      });
+      dt.items.add(file);
+      dt.setData("text/plain", "screenshot.png");
+      ta.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true }));
+    });
+
+    await expect(editor).toHaveValue(/!\[screenshot\]\(https:\/\/files\.catbox\.moe\/fromfilemanager\.png\)/);
   });
 
   test("privacy popover opens near upload control and explains Catbox public hosting", async ({

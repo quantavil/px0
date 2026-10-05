@@ -457,7 +457,10 @@ app.post("/api/image", async (c) => {
     } catch {
       return c.json({ error: "Invalid form data" }, 400);
     }
-    const file = formData.get("file") ?? formData.get("image");
+    const file =
+      formData.get("file") ??
+      formData.get("image") ??
+      formData.get("fileToUpload");
     if (!file || typeof file === "string") {
       return c.json({ error: "No image file provided" }, 400);
     }
@@ -512,6 +515,12 @@ app.post("/api/image", async (c) => {
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 15000);
+  const onClientAbort = () => controller.abort();
+  if (c.req.raw.signal?.aborted) {
+    controller.abort();
+  } else {
+    c.req.raw.signal?.addEventListener("abort", onClientAbort);
+  }
 
   let upstreamRes: Response;
   try {
@@ -524,12 +533,16 @@ app.post("/api/image", async (c) => {
       },
     });
   } catch {
+    if (c.req.raw.signal?.aborted) {
+      return c.json({ error: "Client aborted upload" }, 400);
+    }
     if (controller.signal.aborted) {
       return c.json({ error: "Image upload timed out" }, 504);
     }
     return c.json({ error: "Failed to connect to image host" }, 502);
   } finally {
     clearTimeout(timeoutId);
+    c.req.raw.signal?.removeEventListener("abort", onClientAbort);
   }
 
   if (!upstreamRes.ok) {
