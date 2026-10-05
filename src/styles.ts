@@ -616,6 +616,9 @@ export const MARKDOWN_CSS = `
   .sh__token--number { color: var(--sh-number); }
   .sh__token--identifier { color: var(--sh-identifier); }
   .sh__token--sign { color: var(--sh-sign); }
+  .large-paste-note { color: var(--text-muted); font: 0.85rem/1.5 var(--sans); margin-bottom: 1rem; }
+  .large-paste-excerpt { white-space: pre-wrap; overflow-wrap: anywhere; }
+
 `;
 
 // Landing page editor, live split preview, footer bar and share banner
@@ -626,6 +629,10 @@ export const LANDING_CSS = `
   @media (max-width: 640px) {
     body { overflow: auto; }
   }
+
+  .writing-main { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+
+  body:has(#content:focus-visible) .stats-label { color: var(--text); }
 
   /* Status strip above the editor; the bottom pill stays one row. */
   .util-strip {
@@ -686,7 +693,7 @@ export const LANDING_CSS = `
     position: relative;
     z-index: 1;
     flex: 1 1 0;
-    min-width: 96px;
+    min-width: 104px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -733,9 +740,9 @@ export const LANDING_CSS = `
   @media (max-width: 520px) {
     .seg-full { display: none; }
     .seg-short { display: inline; }
-    .seg-option { min-width: 72px; }
-    .seg-option .badge { padding: 0 0.5rem; }
-    .btn-save { padding: 0 1rem; }
+    .seg-option { min-width: 80px; }
+    .seg-option .badge { padding: 0 0.35rem; }
+    .btn-save { padding: 0 0.8rem; }
   }
 
   .ttl-dropdown { position: relative; }
@@ -853,7 +860,7 @@ export const LANDING_CSS = `
     outline: none;
     color: var(--text);
     font-family: var(--mono);
-    font-size: 0.98rem;
+    font-size: 1rem;
     line-height: 1.7;
     padding: 1.75rem 0;
     resize: none;
@@ -1198,22 +1205,7 @@ export const LANDING_CSS = `
       width: calc(100% - 1rem);
       padding: 0 0.9rem;
     }
-    .editor-container.split-active textarea {
-      display: block !important;
-      width: 100% !important;
-      max-width: 100% !important;
-      height: 50% !important;
-      flex: 1 1 50% !important;
-    }
-    .editor-container.split-active .preview-pane {
-      display: block !important;
-      width: 100% !important;
-      max-width: 100% !important;
-      height: 100% !important;
-      flex: 1 1 100% !important;
-      border-left: none !important;
-      border-top: none !important;
-    }
+
   }
 
   @media (max-width: 520px) {
@@ -1249,6 +1241,25 @@ export const LANDING_CSS = `
       width: 100%;
     }
   }
+  .large-paste-note { color: var(--text-muted); font: 0.85rem/1.5 var(--sans); margin-bottom: 1rem; }
+  .large-paste-excerpt { white-space: pre-wrap; overflow-wrap: anywhere; }
+  .privacy-help { position: relative; width: calc(100% - 2.4rem); max-width: 73.6rem; margin: 0 auto; font-size: 0.75rem; color: var(--text-muted); }
+  .privacy-help summary { cursor: pointer; padding: 0.35rem 0; width: fit-content; display: flex; align-items: center; gap: 0.3rem; list-style: none; }
+  .privacy-help summary::-webkit-details-marker { display: none; }
+  .privacy-help summary::before { content: "▸"; }
+  .privacy-help[open] summary::before { content: "▾"; }
+  .privacy-help summary:hover { color: var(--text); }
+  .privacy-help p { margin: 0.4rem 0; }
+  .privacy-help label { display: flex; align-items: center; gap: 0.5rem; padding-bottom: 0.5rem; }
+  #draftStatus { color: var(--text-muted); font-size: 0.72rem; }
+  .seg-option .badge { opacity: 1; color: var(--text-muted); }
+  .save-error { white-space: normal; overflow: visible; }
+  @media (pointer: coarse) {
+    .btn-action, .util-strip .btn-action, .px-modal-close { width: 44px; height: 44px; }
+    .seg-option .badge, .ttl-trigger { min-height: 44px; }
+    .privacy-help summary, .draft-discard { min-height: 44px; display: inline-flex; align-items: center; }
+  }
+
 `;
 
 // Viewer page layout and the E2EE unlock card

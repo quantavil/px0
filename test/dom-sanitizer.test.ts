@@ -1,10 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { sanitizeOutputHtml } from "../src/client/shared";
+import { sanitizeOutputHtml } from "../src/server-renderer";
 
-// Bun has no window/DOM, so this always exercises the regex fallback
-// (the Worker path). The DOMPurify browser path is covered by
-// e2e/sanitizer.spec.ts in real Chromium.
-describe("sanitizer fallback policy", () => {
+// The parser-based Worker sanitizer is tested here; browser DOMPurify runs
+// in e2e/sanitizer.spec.ts.
+describe("Worker sanitizer policy", () => {
   test("neutralizes scheme tricks", () => {
     for (const payload of [
       '<a href="javascript:alert(1)">x</a>',
@@ -27,17 +26,17 @@ describe("sanitizer fallback policy", () => {
     expect(
       sanitizeOutputHtml('<img src="data:image/png;base64,AAA">'),
     ).toContain("data:image/png");
-    expect(sanitizeOutputHtml('<img src="data:text/html,x">')).toContain(
-      'src="#"',
+    expect(sanitizeOutputHtml('<img src="data:text/html,x">')).not.toContain(
+      "data:text/html",
     );
     expect(
       sanitizeOutputHtml('<img src="data:image/svg+xml;base64,AAA">'),
-    ).toContain('src="#"');
+    ).not.toContain("data:image/svg");
   });
 
   test("srcset second candidate blocked", () => {
     expect(
       sanitizeOutputHtml('<img srcset="a.jpg 1x, javascript:alert(1) 2x">'),
-    ).toContain('srcset="#"');
+    ).not.toContain("javascript:");
   });
 });

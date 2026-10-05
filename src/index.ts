@@ -1,8 +1,13 @@
 import { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
+import { legacyRecord, type PasteRecord } from "./paste-store";
+
+export { PasteStore } from "./paste-store";
+
 import { html, raw } from "hono/html";
 import landingJs from "../public/landing.js" with { type: "text" };
 import viewerJs from "../public/viewer.js" with { type: "text" };
-import { formatTimeLeft, renderMarkdown } from "./client/shared";
+import { formatTimeLeft } from "./client/shared";
 import {
   brandIcon,
   checkIcon,
@@ -20,6 +25,7 @@ import {
   splitIcon,
   trashIcon,
 } from "./icons";
+import { renderMarkdown } from "./server-renderer";
 import {
   BASE_CSS,
   CSS_VARIABLES,
@@ -29,7 +35,6 @@ import {
   VIEWER_CSS,
 } from "./styles";
 import {
-  BURN_PREFIX,
   ENC_PREFIX,
   generateShortId,
   getTtlSeconds,
@@ -42,11 +47,18 @@ import {
 type Bindings = {
   PASTES_KV: KVNamespace;
   PASTE_RATE_LIMITER?: RateLimit;
+  PASTE_STORE?: DurableObjectNamespace;
 };
 
 export const inMemoryPastes = new Map<
   string,
-  { payload: string; expiresAt?: number; deleteToken?: string }
+  {
+    payload: string;
+    expiresAt?: number;
+    deleteToken?: string;
+    burn?: boolean;
+    encrypted?: boolean;
+  }
 >();
 
 export function setInMemoryPaste(
@@ -82,51 +94,82 @@ export function getAndConsumeInMemoryPaste(id: string): string | null {
   return entry.payload;
 }
 
-type PasteRecord = {
-  value: string;
-  expiresAtMs?: number;
-  deleteToken?: string;
-};
+function storeStub(id: string, env: Bindings) {
+  const store = env.PASTE_STORE;
+  if (!store) throw new Error("Paste storage binding unavailable");
+  return store.get(store.idFromName(id));
+}
 
-// Read a paste from KV or the in-memory fallback, with absolute expiry when known.
 async function readPaste(
   id: string,
   env?: Bindings,
 ): Promise<PasteRecord | null> {
+  if (env?.PASTE_STORE) {
+    const res = await storeStub(id, env).fetch(`https://store/get?id=${id}`);
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error("Paste storage read failed");
+    return res.json();
+  }
   if (env?.PASTES_KV) {
-    const res = await env.PASTES_KV.getWithMetadata(id, { type: "text" });
-    if (!res || res.value === null) return null;
-    const meta = res.metadata as {
+    const res = await env.PASTES_KV.getWithMetadata<{
       createdAt?: number;
       ttlSeconds?: number;
       deleteToken?: string;
-    } | null;
-    let expiresAtMs: number | undefined;
-    if (meta?.createdAt && meta.ttlSeconds) {
-      expiresAtMs = meta.createdAt + meta.ttlSeconds * 1000;
-    } else {
-      // Fallback for pastes stored before expiry metadata existed:
-      // recover the absolute expiration (Unix seconds) via list().
-      const listed = await env.PASTES_KV.list({ prefix: id, limit: 1 });
-      const key = listed.keys[0];
-      if (key?.expiration) {
-        expiresAtMs = key.expiration * 1000;
-      }
-    }
-    return { value: res.value, expiresAtMs, deleteToken: meta?.deleteToken };
+    }>(id, { type: "text" });
+    if (res.value === null) return null;
+    const record = legacyRecord(res.value, res.metadata);
+    return record.expiresAtMs && record.expiresAtMs <= Date.now()
+      ? null
+      : record;
   }
-
   const entry = inMemoryPastes.get(id);
   if (!entry) return null;
-  if (entry.expiresAt && Date.now() > entry.expiresAt) {
+  if (entry.expiresAt && Date.now() >= entry.expiresAt) {
     inMemoryPastes.delete(id);
     return null;
   }
+  const record =
+    entry.burn === undefined
+      ? legacyRecord(entry.payload)
+      : {
+          value: entry.payload,
+          burn: entry.burn,
+          encrypted: entry.encrypted ?? false,
+        };
   return {
-    value: entry.payload,
+    ...record,
     expiresAtMs: entry.expiresAt,
     deleteToken: entry.deleteToken,
   };
+}
+
+async function consumePaste(
+  id: string,
+  env?: Bindings,
+): Promise<PasteRecord | null> {
+  if (env?.PASTE_STORE) {
+    const res = await storeStub(id, env).fetch(
+      `https://store/consume?id=${id}`,
+      { method: "POST" },
+    );
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error("Paste consumption failed");
+    return res.json();
+  }
+  // Production always uses the atomic object; local storage consumes synchronously.
+  const entry = inMemoryPastes.get(id);
+  if (!entry) return null;
+  const value = getAndConsumeInMemoryPaste(id);
+  if (value === null) return null;
+  const record =
+    entry.burn === undefined
+      ? legacyRecord(value)
+      : {
+          value,
+          burn: entry.burn,
+          encrypted: entry.encrypted ?? false,
+        };
+  return { ...record, deleteToken: entry.deleteToken };
 }
 
 // Single source of truth for paste IDs (was copy-pasted in three handlers).
@@ -223,20 +266,36 @@ app.get("/favicon.ico", (c) => {
   return c.body(faviconSvg, 200, { "Content-Type": "image/svg+xml" });
 });
 
-// Bundled client scripts (separate files = no template-string XSS risk).
-app.get("/static/landing.js", (c) => {
-  return c.body(landingJs, 200, {
-    "Content-Type": "application/javascript; charset=utf-8",
-    "Cache-Control": "no-cache, no-store, must-revalidate",
+// Public scripts may revalidate; private paste responses remain no-store.
+for (const [path, script] of [
+  ["landing", landingJs],
+  ["viewer", viewerJs],
+]) {
+  let etagPromise: Promise<string> | undefined;
+  app.get(`/static/${path}.js`, async (c) => {
+    etagPromise ??= crypto.subtle
+      .digest("SHA-256", new TextEncoder().encode(script))
+      .then(
+        (bytes) =>
+          `"${Array.from(new Uint8Array(bytes), (byte) => byte.toString(16).padStart(2, "0")).join("")}"`,
+      );
+    const etag = await etagPromise;
+    const headers = {
+      "Content-Type": "application/javascript; charset=utf-8",
+      "Cache-Control": "public, no-cache",
+      ETag: etag,
+    };
+    const matches = c.req
+      .header("if-none-match")
+      ?.split(",")
+      .some(
+        (value) =>
+          value.trim().replace(/^W\//, "") === etag || value.trim() === "*",
+      );
+    if (matches) return c.body(null, 304, headers);
+    return c.body(script, 200, headers);
   });
-});
-
-app.get("/static/viewer.js", (c) => {
-  return c.body(viewerJs, 200, {
-    "Content-Type": "application/javascript; charset=utf-8",
-    "Cache-Control": "no-cache, no-store, must-revalidate",
-  });
-});
+}
 
 // 1. Landing Page Route
 app.get("/", (c) => {
@@ -259,7 +318,6 @@ app.get("/", (c) => {
         </style>
       </head>
       <body>
-        <h1 class="sr-only">px0 — minimalist markdown pastebin</h1>
         <form id="pasteForm">
           <header>
             <a href="/" class="brand" title="px0">
@@ -273,22 +331,31 @@ app.get("/", (c) => {
             </div>
           </header>
 
+          <main class="writing-main" aria-label="Write a paste">
+          <h1 class="sr-only">px0 — minimalist markdown pastebin</h1>
           <div class="util-strip">
             <div class="util-left">
               <span id="charCount" class="stats-label" title="0 lines (0 B / 5MB)">0 lines · 0 B</span>
-              <span id="draftContainer"></span>
+              <span id="draftContainer" role="status"></span>
+              <span id="draftStatus" role="status"></span>
               <span id="saveError" class="save-error" role="alert"></span>
             </div>
-            <button type="button" id="btnSplit" class="btn-action" title="Toggle preview" aria-label="Toggle preview" aria-pressed="false">
+            <button type="button" id="btnSplit" class="btn-action" title="Toggle preview" aria-label="Toggle preview" aria-controls="previewPane" aria-pressed="false">
               ${raw(splitIcon)}
             </button>
           </div>
 
           <div id="editorContainer" class="editor-container">
-            <textarea id="content" aria-label="Paste content" placeholder="Go ahead, type something…&#10;(you can paste markdown or code here)"></textarea>
-            <div id="previewPane" class="preview-pane"></div>
+            <textarea id="content" name="content" autocomplete="off" spellcheck="false" aria-label="Paste content" placeholder="Go ahead, type something…&#10;(you can paste markdown or code here)"></textarea>
+            <div id="previewPane" class="preview-pane" role="region" aria-label="Preview"></div>
           </div>
 
+          <details class="privacy-help">
+            <summary>Encryption &amp; local drafts</summary>
+            <p>Encrypted pastes need the complete link to read. Drafts are saved unencrypted on this device.</p>
+            <label><input type="checkbox" id="draftPreference" checked> Save drafts on this device</label>
+          </details>
+          </main>
           <footer class="footer-bar">
             <div class="footer-left">
               <div class="mode-seg" role="group" aria-label="Paste mode">
@@ -296,9 +363,9 @@ app.get("/", (c) => {
                   <input type="radio" name="mode" id="modePlaintext" aria-label="Plaintext" checked>
                   <span class="badge badge-public" id="modePlaintextLabel">${raw(globeSvg)}<span class="seg-full">Plaintext</span><span class="seg-short" aria-hidden="true">Plain</span></span>
                 </label>
-                <label class="seg-option" title="Zero-knowledge encrypted: the key never leaves your browser">
-                  <input type="radio" name="mode" id="e2eeToggle">
-                  <span class="badge badge-encrypted" id="toggleLabel">${raw(lockIcon)} E2EE</span>
+                <label class="seg-option" title="Encrypted: only people with the complete link can read it">
+                  <input type="radio" name="mode" id="e2eeToggle" aria-label="Encrypted">
+                  <span class="badge badge-encrypted" id="toggleLabel">${raw(lockIcon)}<span class="seg-full">Encrypted</span><span class="seg-short" aria-hidden="true">Encrypt</span></span>
                 </label>
               </div>
               <div class="ttl-dropdown" id="ttlDropdown">
@@ -332,6 +399,15 @@ app.get("/", (c) => {
   );
 });
 
+// Bound wire bytes separately: JSON escaping can expand each content byte sixfold.
+app.use(
+  "/api/paste",
+  bodyLimit({
+    maxSize: MAX_PASTE_BYTES * 6 + 1024,
+    onError: (c) => c.json({ error: "Request body too large" }, 413),
+  }),
+);
+
 // 2. Submit Paste API
 app.post("/api/paste", async (c) => {
   const clientIp = c.req.header("cf-connecting-ip") || "127.0.0.1";
@@ -342,11 +418,6 @@ app.post("/api/paste", async (c) => {
     );
   }
 
-  const contentLength = Number(c.req.header("content-length"));
-  if (contentLength && contentLength > MAX_PASTE_BYTES + 1024) {
-    return c.json({ error: "Payload exceeds 5MB limit" }, 413);
-  }
-
   // Accept raw bodies too so `curl` users skip JSON escaping; match the
   // media type exactly so lookalikes (e.g. json-patch+json) miss the JSON path.
   const rawContentType =
@@ -355,15 +426,17 @@ app.post("/api/paste", async (c) => {
 
   let content: unknown;
   let ttl: unknown;
+  let encrypted = false;
 
   if (isJson) {
-    let body: { content?: unknown; ttl?: unknown };
+    let body: { content?: unknown; ttl?: unknown; encrypted?: unknown };
     try {
       body = await c.req.json();
     } catch {
       return c.json({ error: "Invalid JSON body" }, 400);
     }
     ({ content, ttl } = body || {});
+    encrypted = body?.encrypted === true;
   } else {
     content = await c.req.text();
     ttl = c.req.query("ttl");
@@ -377,33 +450,48 @@ app.post("/api/paste", async (c) => {
     return c.json({ error: "Paste size exceeds 5MB limit" }, 413);
   }
 
-  // Never silently overwrite a key (would orphan its deleteToken); retry on collision.
-  let id = generateShortId(8);
-  for (let attempt = 0; attempt < 3; attempt++) {
-    if (!(await readPaste(id, c.env))) break;
-    id = generateShortId(8);
-  }
-  if (await readPaste(id, c.env)) {
-    return c.json({ error: "ID collision, please retry" }, 503);
-  }
-  const deleteToken = generateShortId(16);
   const selectedTtl = typeof ttl === "string" ? ttl : "30d";
-  if (selectedTtl !== "burn" && !TTL_MAP[selectedTtl]) {
+  if (selectedTtl !== "burn" && !Object.hasOwn(TTL_MAP, selectedTtl)) {
     return c.json({ error: "Invalid TTL option" }, 400);
   }
-  const isBurnAfterRead = selectedTtl === "burn";
-
-  const storedPayload = isBurnAfterRead ? `${BURN_PREFIX}${content}` : content;
-  const ttlSeconds = isBurnAfterRead ? 86400 : getTtlSeconds(selectedTtl);
-
-  if (c.env?.PASTES_KV) {
-    await c.env.PASTES_KV.put(id, storedPayload, {
-      expirationTtl: ttlSeconds,
-      metadata: { createdAt: Date.now(), ttlSeconds, deleteToken },
-    });
-  } else {
-    setInMemoryPaste(id, storedPayload, ttlSeconds, deleteToken);
+  if (encrypted && !content.startsWith(ENC_PREFIX)) {
+    return c.json({ error: "Invalid encrypted payload" }, 400);
   }
+  const burn = selectedTtl === "burn";
+  const ttlSeconds = burn ? 86400 : getTtlSeconds(selectedTtl);
+  const deleteToken = generateShortId(16);
+  const record: PasteRecord = {
+    value: content,
+    burn,
+    encrypted,
+    deleteToken,
+    expiresAtMs: Date.now() + ttlSeconds * 1000,
+  };
+  let id = "";
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const candidate = generateShortId(12);
+    if (c.env?.PASTE_STORE) {
+      const response = await storeStub(candidate, c.env).fetch(
+        `https://store/create?id=${candidate}`,
+        {
+          method: "POST",
+          body: JSON.stringify(record),
+        },
+      );
+      if (response.status === 409) continue;
+      if (!response.ok) throw new Error("Paste storage write failed");
+    } else {
+      if (c.env?.PASTES_KV)
+        throw new Error("Durable Object storage is not configured");
+      if (inMemoryPastes.has(candidate)) continue;
+      setInMemoryPaste(candidate, content, ttlSeconds, deleteToken);
+      const entry = inMemoryPastes.get(candidate);
+      if (entry) Object.assign(entry, { burn, encrypted });
+    }
+    id = candidate;
+    break;
+  }
+  if (!id) return c.json({ error: "ID collision, please retry" }, 503);
 
   // Raw-body callers get a pipeable URL; the header states the plaintext
   // posture (all crypto lives in landing.ts, curl has none).
@@ -434,6 +522,17 @@ app.delete("/api/paste/:id", async (c) => {
   const providedToken =
     c.req.header("x-delete-token") || c.req.query("token") || "";
 
+  if (c.env?.PASTE_STORE) {
+    const result = await storeStub(id, c.env).fetch(
+      `https://store/delete?id=${id}`,
+      { method: "POST", headers: { "X-Delete-Token": providedToken } },
+    );
+    if (result.status === 404) return c.json({ error: "Paste not found" }, 404);
+    if (result.status === 401)
+      return c.json({ error: "Unauthorized: Invalid delete token" }, 401);
+    if (!result.ok) throw new Error("Paste deletion failed");
+    return c.json({ ok: true });
+  }
   const record = await readPaste(id, c.env);
   if (!record) {
     return c.json({ error: "Paste not found" }, 404);
@@ -499,7 +598,7 @@ app.get("/:id", async (c) => {
   }
 
   // Burn-after-read: never burn on prefetch (values can combine, so substring-match).
-  const isBurnAfterRead = rawContent.startsWith(BURN_PREFIX);
+  const isBurnAfterRead = record?.burn ?? false;
   const isConfirmed = c.req.query("confirm") === "1";
   const purpose = c.req.header("purpose") || "";
   const secPurpose = c.req.header("sec-purpose") || "";
@@ -551,27 +650,26 @@ app.get("/:id", async (c) => {
   }
 
   if (isBurnAfterRead) {
-    rawContent = rawContent.slice(BURN_PREFIX.length);
-    expiresAtMs = undefined; // burn-after-read pastes self-destruct on view; no countdown
-    // Fail closed: if the delete throws, 500 without rendering (never show unburned content).
-    if (c.env?.PASTES_KV) {
-      await c.env.PASTES_KV.delete(id);
-    } else {
-      getAndConsumeInMemoryPaste(id);
-    }
+    const consumed = await consumePaste(id, c.env);
+    if (!consumed)
+      return c.text("Paste Expired or Not Found", 404, {
+        "Cache-Control": "no-store",
+      });
+    rawContent = consumed.value;
+    expiresAtMs = undefined;
   }
 
   const ttlLabel =
     expiresAtMs !== undefined ? formatTimeLeft(expiresAtMs - Date.now()) : "";
 
   // Legacy password pastes are retired, not rendered.
-  if (rawContent.startsWith("__PX0_PASS__:")) {
+  if (record?.retired) {
     return c.text(
       "Paste Unavailable — password pastes are no longer supported",
       410,
     );
   }
-  const isEncrypted = rawContent.startsWith(ENC_PREFIX);
+  const isEncrypted = record?.encrypted ?? false;
   let renderedHtml = "";
 
   if (!isEncrypted) {
@@ -627,7 +725,8 @@ app.get("/:id", async (c) => {
           </div>
         </header>
 
-        <main class="viewer-container">
+        <main class="viewer-container" aria-label="Paste">
+          <h1 class="sr-only">Paste ${id}</h1>
           <div class="viewer-body">
             <div id="output" class="markdown-body">
               ${isEncrypted ? html`<p class="viewer-msg">Decrypting end-to-end encrypted payload in browser...</p>` : raw(renderedHtml)}
@@ -637,7 +736,7 @@ app.get("/:id", async (c) => {
 
         <footer class="footer-bar">
           <div class="footer-left">
-            ${isEncrypted ? html`<span class="badge badge-encrypted" title="Zero-Knowledge Encrypted">${raw(lockIcon)} E2EE</span>` : html`<span class="badge badge-public" title="Stored unencrypted">${raw(globeSvg)} Plaintext</span>`}
+            ${isEncrypted ? html`<span class="badge badge-encrypted" title="Zero-Knowledge Encrypted">${raw(lockIcon)} Encrypted</span>` : html`<span class="badge badge-public" title="Stored unencrypted">${raw(globeSvg)} Plaintext</span>`}
           </div>
           <div class="footer-right">
             ${
@@ -676,7 +775,7 @@ app.get("/raw/:id", async (c) => {
     return c.text("Paste Expired or Not Found", 404);
   }
 
-  if (rawContent.startsWith(BURN_PREFIX)) {
+  if (record?.burn) {
     const isConfirmed = c.req.query("confirm") === "1";
     const purpose = (c.req.header("purpose") || "").toLowerCase();
     const secPurpose = (c.req.header("sec-purpose") || "").toLowerCase();
@@ -691,12 +790,12 @@ app.get("/raw/:id", async (c) => {
         { "Cache-Control": "no-store" },
       );
     }
-    rawContent = rawContent.slice(BURN_PREFIX.length);
-    if (c.env?.PASTES_KV) {
-      await c.env.PASTES_KV.delete(id);
-    } else {
-      getAndConsumeInMemoryPaste(id);
-    }
+    const consumed = await consumePaste(id, c.env);
+    if (!consumed)
+      return c.text("Paste Expired or Not Found", 404, {
+        "Cache-Control": "no-store",
+      });
+    rawContent = consumed.value;
   }
 
   return c.text(rawContent, 200, {

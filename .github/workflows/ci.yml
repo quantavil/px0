@@ -12,7 +12,12 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -36,3 +41,12 @@ jobs:
 
       - name: Run Unit Tests
         run: bun run test
+
+      - name: Test Cloudflare storage integration
+        run: bun run test:worker
+
+      - name: Install Chromium
+        run: bunx playwright install --with-deps chromium
+
+      - name: Run browser and accessibility regressions
+        run: bun run test:e2e

@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import {
-  formatTimeLeft,
-  renderMarkdown,
-  sanitizeOutputHtml,
-} from "../src/client/shared";
-import app, { pruneRateLimitMap, rateLimitMap } from "../src/index";
+import { formatTimeLeft } from "../src/client/shared";
+import app, {
+  pruneRateLimitMap,
+  rateLimitMap,
+  setInMemoryPaste,
+} from "../src/index";
+import { renderMarkdown, sanitizeOutputHtml } from "../src/server-renderer";
 import {
   bytesToBase64,
   bytesToBase64Url,
@@ -264,7 +265,7 @@ describe("Hono Security & Route Handlers", () => {
     expect(res.status).toBe(200);
     const data = (await res.json()) as { id: string };
     expect(data.id).toBeDefined();
-    expect(data.id).toHaveLength(8);
+    expect(data.id).toHaveLength(12);
 
     // Verify retrieval via GET /:id
     const viewRes = await app.request(`/${data.id}`);
@@ -333,7 +334,11 @@ describe("Hono Security & Route Handlers", () => {
     const res = await app.request("/api/paste", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: encContent, ttl: "burn" }),
+      body: JSON.stringify({
+        content: encContent,
+        ttl: "burn",
+        encrypted: true,
+      }),
     });
 
     expect(res.status).toBe(200);
@@ -387,16 +392,8 @@ describe("Hono Security & Route Handlers", () => {
 
   test("legacy password pastes retire with 410 instead of rendering ciphertext", async () => {
     const passwordPayload = "__PX0_PASS__:salt123:iv123:ciphertext123";
-    const res = await app.request("/api/paste", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: passwordPayload }),
-    });
-
-    expect(res.status).toBe(200);
-    const data = (await res.json()) as { id: string };
-
-    const viewRes = await app.request(`/${data.id}`);
+    setInMemoryPaste("legacyPassTest", passwordPayload, 86400);
+    const viewRes = await app.request("/legacyPassTest");
     expect(viewRes.status).toBe(410);
   });
 
@@ -405,7 +402,7 @@ describe("Hono Security & Route Handlers", () => {
     const res = await app.request("/api/paste", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: encryptedPayload }),
+      body: JSON.stringify({ content: encryptedPayload, encrypted: true }),
     });
 
     expect(res.status).toBe(200);
@@ -429,7 +426,7 @@ describe("Hono Security & Route Handlers", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("X-Px0-Storage")).toBe("plaintext");
     const url = (await res.text()).trim();
-    expect(url).toMatch(/^https?:\/\/.+\/[A-Za-z0-9\-_]{8}$/);
+    expect(url).toMatch(/^https?:\/\/.+\/[A-Za-z0-9\-_]{12}$/);
 
     const viewRes = await app.request(`/${url.split("/").pop()}`);
     expect(viewRes.status).toBe(200);
@@ -487,14 +484,14 @@ describe("Hono Security & Route Handlers", () => {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Content-Length": "6000000",
+        "Content-Length": "40000000",
       },
       body: JSON.stringify({ content: "test" }),
     });
 
     expect(res.status).toBe(413);
     const data = (await res.json()) as { error: string };
-    expect(data.error).toBe("Payload exceeds 5MB limit");
+    expect(data.error).toBe("Request body too large");
   });
 
   test("Global middleware sets Strict-Transport-Security and CSP frame-ancestors headers", async () => {
@@ -546,7 +543,7 @@ describe("Hono Security & Route Handlers", () => {
     const encodedMalicious = '<a href="&#106;avascript:alert(1)">Click</a>';
     const cleaned = sanitizeOutputHtml(encodedMalicious);
     expect(cleaned).not.toContain("&#106;avascript:alert(1)");
-    expect(cleaned).toContain('href="#"');
+    expect(cleaned).not.toContain("href=");
   });
 
   test("renderMarkdown preserves language class on fenced code blocks", () => {
@@ -635,7 +632,7 @@ describe("Hono Security & Route Handlers", () => {
     ]) {
       const cleaned = sanitizeOutputHtml(payload);
       expect(cleaned).not.toContain("java");
-      expect(cleaned).toContain('href="#"');
+      expect(cleaned).not.toContain("href=");
     }
   });
 
@@ -645,17 +642,17 @@ describe("Hono Security & Route Handlers", () => {
     ).toContain('src="data:image/png;base64,AAA"');
     expect(
       sanitizeOutputHtml('<img src="data:text/html,<h1>x</h1>">'),
-    ).toContain('src="#"');
+    ).not.toContain("src=");
     expect(
       sanitizeOutputHtml('<img src="data:image/svg+xml;base64,AAA">'),
-    ).toContain('src="#"');
+    ).not.toContain("src=");
   });
 
   test("sanitizer blocks javascript: hidden in second srcset candidate", () => {
     const cleaned = sanitizeOutputHtml(
       '<img srcset="a.jpg 1x, javascript:alert(1) 2x">',
     );
-    expect(cleaned).toContain('srcset="#"');
+    expect(cleaned).not.toContain("srcset=");
   });
 
   test("burn /raw/:id resists prefetch without confirm", async () => {

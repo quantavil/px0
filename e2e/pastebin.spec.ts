@@ -9,7 +9,7 @@ test.describe('px0 E2E Browser Test Suite', () => {
     await expect(page.locator('.brand')).toContainText('px0');
     // Plaintext is the default mode; E2EE is opt-in via the footer seg.
     await expect(page.locator('#modePlaintext')).toBeChecked();
-    await expect(page.locator('#toggleLabel')).toContainText('E2EE');
+    await expect(page.locator('#toggleLabel')).toContainText('Encrypted');
     // Status strip above the editor holds counter + split; footer is one row.
     await expect(page.locator('.util-strip #charCount')).toContainText('0 lines · 0 B');
     await expect(page.locator('.util-strip #btnSplit')).toBeVisible();
@@ -86,7 +86,7 @@ test.describe('px0 E2E Browser Test Suite', () => {
     await viewPage.waitForSelector('#output h1');
 
     // Verify browser decrypted payload and rendered formatted markdown
-    await expect(viewPage.locator('.badge-encrypted')).toContainText('E2EE');
+    await expect(viewPage.locator('.badge-encrypted')).toContainText('Encrypted');
     await expect(viewPage.locator('#output h1')).toHaveText('Top Secret E2EE Note');
     await expect(viewPage.locator('#output code')).toHaveText('super-secret-123');
 
@@ -98,7 +98,7 @@ test.describe('px0 E2E Browser Test Suite', () => {
     const downloadPromise = viewPage.waitForEvent('download');
     await viewPage.locator('#downloadBtn').click();
     const download = await downloadPromise;
-    expect(download.suggestedFilename()).toMatch(/^[A-Za-z0-9\-_]{8}\.md$/);
+    expect(download.suggestedFilename()).toMatch(/^[A-Za-z0-9\-_]{12}\.md$/);
 
     // Open URL without hash fragment -> verify interactive decryption key missing card
     const urlWithoutHash = fullUrlWithHash.split('#')[0];
@@ -110,7 +110,7 @@ test.describe('px0 E2E Browser Test Suite', () => {
     // Open URL with invalid hash fragment -> verify invalid key error message
     await page2.goto(urlWithoutHash + '#invalidKey123');
     await expect(page2.locator('.unlock-title')).toHaveText('Decryption Failed');
-    await expect(page2.locator('#keyErr')).toContainText('Error: Decryption key is invalid or corrupted.');
+    await expect(page2.locator('#keyErr')).toContainText('correct key');
   });
 
   test('4. 404 Expired or missing paste page', async ({ page }) => {
@@ -264,7 +264,7 @@ func main() {
     await expect(page.locator('#pxModalOverlay')).toBeVisible();
     const e2eeUrl = await page.locator('#pxPasteUrl').inputValue();
     expect(e2eeUrl).toContain('#');
-    await expect(page.locator('.px-modal-badges .badge-encrypted')).toContainText('E2EE');
+    await expect(page.locator('.px-modal-badges .badge-encrypted')).toContainText('Encrypted');
 
     // Switch back to plaintext — next save carries no key
     await page.locator('#pxModalDoneBtn').click();
@@ -344,7 +344,7 @@ func main() {
 
     // C. E2EE Unlock Card Visual Tokens
     const encRes = await page.request.post('/api/paste', {
-      data: { content: '__PX0_ENC__:SGVsbG8gV29ybGQ=' },
+      data: { content: '__PX0_ENC__:SGVsbG8gV29ybGQ=', encrypted: true },
     });
     const { id: encId } = (await encRes.json()) as { id: string };
     await page.goto(`/${encId}`);
@@ -406,7 +406,7 @@ func main() {
     await page.locator('label:has(#e2eeToggle)').click();
     await page.locator('#content').fill('# Sealed memo');
     await page.locator('button[type="submit"]').click();
-    await expect(page.locator('.px-modal-badges .badge-encrypted')).toContainText('E2EE');
+    await expect(page.locator('.px-modal-badges .badge-encrypted')).toContainText('Encrypted');
   });
 
   test('14. Draft autosave restores un-submitted text and allows discarding', async ({ page }) => {

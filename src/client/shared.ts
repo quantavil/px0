@@ -18,7 +18,7 @@ export function formatTimeLeft(ms: number): string {
   return "<1m left";
 }
 
-// Scheme check shared by the regex fallback and the link renderer: strips
+// Scheme check shared by both sanitizers and the Markdown link renderer: strips
 // all C0/space (browsers ignore embedded tab/newline in URLs).
 function decodeEntities(s: string): string {
   return s
@@ -45,7 +45,7 @@ function isAllowedDataUrl(normalized: string): boolean {
   return /^data:image\/(png|jpeg|gif|webp|avif);/.test(normalized);
 }
 
-function isDangerousUrl(rawVal: string): boolean {
+export function isDangerousUrl(rawVal: string): boolean {
   const normalized = normalizeForSchemeCheck(rawVal);
   if (
     normalized.startsWith("javascript:") ||
@@ -60,7 +60,7 @@ function isDangerousUrl(rawVal: string): boolean {
 }
 
 // srcset holds comma-separated candidates; check each URL separately.
-function isDangerousSrcset(rawVal: string): boolean {
+export function isDangerousSrcset(rawVal: string): boolean {
   const candidates = decodeEntities(rawVal).split(",");
   for (const cand of candidates) {
     const urlToken = cand.trim().split(/\s+/)[0] ?? "";
@@ -70,7 +70,7 @@ function isDangerousSrcset(rawVal: string): boolean {
   return false;
 }
 
-// DOMPurify config mirrors the fallback: dangerous tags/style/handlers gone,
+// Browser DOMPurify policy: dangerous tags/style/handlers gone,
 // URIs enforced by hook below (raster data: images only).
 const PURIFY_CONFIG = {
   FORBID_TAGS: [
@@ -88,6 +88,8 @@ const PURIFY_CONFIG = {
     "applet",
     "noscript",
     "template",
+    "svg",
+    "math",
   ],
   FORBID_ATTR: ["style"],
   ADD_ATTR: [
@@ -118,25 +120,19 @@ let purifyHooked = false;
 function purifyBrowser(dirty: string): string | null {
   try {
     if (typeof window === "undefined") return null;
-    const p = DOMPurify as unknown as {
-      isSupported: boolean;
-      addHook(
-        name: "uponSanitizeAttribute",
-        cb: (
-          node: Element,
-          data: { attrName: string; attrValue: string; keepAttr: boolean },
-        ) => void,
-      ): void;
-      sanitize(dirty: string, config: typeof PURIFY_CONFIG): string;
-    };
-    if (!p?.isSupported) return null;
-    // Same URL policy as the regex fallback (same functions), enforced as
+    if (!DOMPurify.isSupported) return null;
+    // Same URL policy as the server sanitizer (same functions), enforced as
     // a hook so DOMPurify defaults can't silently allow e.g. data:text/html.
     if (!purifyHooked) {
-      p.addHook("uponSanitizeAttribute", (_node, data) => {
+      DOMPurify.addHook("uponSanitizeAttribute", (_node, data) => {
         const name = String(data.attrName || "").toLowerCase();
         const value = String(data.attrValue ?? "");
-        if (name === "srcset") {
+        if (name === "class") {
+          data.attrValue = value
+            .split(/\s+/)
+            .filter((name) => /^(?:sh__[-\w]+|language-[-\w]+)$/.test(name))
+            .join(" ");
+        } else if (name === "srcset") {
           if (isDangerousSrcset(value)) data.keepAttr = false;
         } else if (URI_ATTRS.has(name)) {
           if (isDangerousUrl(value)) data.keepAttr = false;
@@ -144,50 +140,16 @@ function purifyBrowser(dirty: string): string | null {
       });
       purifyHooked = true;
     }
-    return p.sanitize(dirty, PURIFY_CONFIG);
+    return DOMPurify.sanitize(dirty, PURIFY_CONFIG);
   } catch {
     return null;
   }
 }
 
 export function sanitizeOutputHtml(htmlStr: string): string {
-  // Real browsers: DOMPurify (fuzzed, bounty-backed). Workers/Bun: regex
-  // fallback with the same policy (no DOM available there).
-  return purifyBrowser(htmlStr) ?? regexSanitize(htmlStr);
-}
-
-function regexSanitize(htmlStr: string): string {
-  return (
-    htmlStr
-      // Dangerous tags.
-      .replace(
-        /<\s*(script|iframe|object|embed|style|form|link|meta|base|frame|frameset|applet)\b[\s\S]*?<\s*\/\s*\1\s*>/gi,
-        "",
-      )
-      .replace(
-        /<\s*(script|iframe|object|embed|style|form|link|meta|base|frame|frameset|applet)\b[^>]*\/?>/gi,
-        "",
-      )
-      // Event handlers + inline style.
-      .replace(/[\s/]+on[a-z0-9_-]+\s*=\s*(?:'[^']*'|"[^"]*"|[^\s>]+)/gi, "")
-      .replace(/[\s/]+style\s*=\s*(?:'[^']*'|"[^"]*"|[^\s>]+)/gi, "")
-      // Dangerous URI schemes.
-      .replace(
-        /(href|src|xlink:href|formaction|srcset|poster|background|srcdoc|lowsrc)\s*=\s*(?:'([^']*)'|"([^"]*)"|([^\s>]+))/gi,
-        (match, attrName, valSingle, valDouble, valBare) => {
-          const rawVal = valSingle ?? valDouble ?? valBare ?? "";
-          const attrLower = String(attrName).toLowerCase();
-          const dangerous =
-            attrLower === "srcset"
-              ? isDangerousSrcset(rawVal)
-              : isDangerousUrl(rawVal);
-          if (dangerous) {
-            return `${attrName}="#"`;
-          }
-          return match;
-        },
-      )
-  );
+  // Fail closed if the browser sanitizer is unavailable. The Worker uses its
+  // own parser-based sanitizer, never a regex approximation of browser HTML.
+  return purifyBrowser(htmlStr) ?? sanitizeHtml(htmlStr);
 }
 
 // One marked config for server, live preview, and decrypted pastes.
@@ -206,8 +168,16 @@ marked.use({
   },
 });
 
-export function renderMarkdown(md: string): string {
+export const MAX_RENDER_CHARS = 20000;
+
+export function renderMarkdown(
+  md: string,
+  sanitize = sanitizeOutputHtml,
+): string {
   if (!md?.trim()) return "";
+  if (md.length > MAX_RENDER_CHARS) {
+    return `<p class="large-paste-note">Large paste — showing the first 20,000 characters as text. Copy or download to get the complete paste.</p><pre class="large-paste-excerpt"><code>${sanitizeHtml(md.slice(0, MAX_RENDER_CHARS))}</code></pre>`;
+  }
 
   const parsed = marked.parse(md, { async: false }) as string;
 
@@ -229,7 +199,7 @@ export function renderMarkdown(md: string): string {
     },
   );
 
-  return sanitizeOutputHtml(highlighted);
+  return sanitize(highlighted);
 }
 
 export async function copyToClipboard(text: string): Promise<boolean> {
@@ -245,18 +215,22 @@ export async function copyToClipboard(text: string): Promise<boolean> {
 }
 
 function fallbackCopyToClipboard(text: string): boolean {
+  const previous = document.activeElement as HTMLElement | null;
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.tabIndex = -1;
+  ta.setAttribute("aria-hidden", "true");
+  ta.style.position = "fixed";
+  ta.style.opacity = "0";
   try {
-    const ta = document.createElement("textarea");
-    ta.value = text;
-    ta.style.position = "fixed";
-    ta.style.opacity = "0";
     document.body.appendChild(ta);
     ta.select();
-    const success = document.execCommand("copy");
-    document.body.removeChild(ta);
-    return Boolean(success);
+    return Boolean(document.execCommand("copy"));
   } catch {
     return false;
+  } finally {
+    ta.remove();
+    previous?.focus();
   }
 }
 

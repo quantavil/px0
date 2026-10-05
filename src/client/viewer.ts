@@ -94,7 +94,7 @@ function revealPasteActions() {
 function pasteText(): string {
   if (window.__PX0_DECRYPTED_TEXT__) return window.__PX0_DECRYPTED_TEXT__;
   const rawVal = window.__PX0_DATA__?.rawContent || "";
-  return rawVal.startsWith(ENC_PREFIX) ? "" : rawVal;
+  return window.__PX0_DATA__?.isEncrypted ? "" : rawVal;
 }
 
 async function copyContent() {
@@ -223,7 +223,45 @@ function preserveHashOnBurnReveal() {
   }
 }
 
+function showUnlockCard(outputEl: HTMLElement, failed = false) {
+  outputEl.innerHTML = `
+    <div class="unlock-card-wrapper"><div class="unlock-card">
+      <div class="unlock-icon-container">${lockIcon}</div>
+      <h1 class="unlock-title">${failed ? "Decryption Failed" : "Decryption Key Required"}</h1>
+      <p class="unlock-subtitle">${failed ? "Invalid decryption key or corrupted payload." : "This paste is encrypted. Open the complete link, including the key after #, or enter the key below."}</p>
+      <div class="unlock-form-row">
+        <input type="text" id="manualKeyInput" class="unlock-input" placeholder="Paste decryption key…" aria-label="Decryption key" aria-describedby="keyErr" autocomplete="off" spellcheck="false">
+        <button type="button" id="btnDecryptAction" class="btn-unlock-submit">${failed ? "Try Again" : "Decrypt"}</button>
+      </div>
+      <p id="keyErr" class="unlock-err-msg" role="alert">${failed ? "Check the complete link or ask the sender for the correct key." : ""}</p>
+    </div></div>`;
+  const input = outputEl.querySelector<HTMLInputElement>("#manualKeyInput");
+  const button = outputEl.querySelector<HTMLButtonElement>("#btnDecryptAction");
+  const error = outputEl.querySelector<HTMLElement>("#keyErr");
+  const submit = () => {
+    const value = input?.value.trim().replace(/^#/, "") ?? "";
+    if (!value) {
+      if (error) error.textContent = "Enter the decryption key.";
+      return;
+    }
+    if (button) button.disabled = true;
+    if (location.hash === `#${value}`) initPageViewer();
+    else location.hash = value;
+  };
+  button?.addEventListener("click", submit);
+  input?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.isComposing) submit();
+  });
+  input?.addEventListener("input", () => {
+    if (error) error.textContent = "";
+  });
+  if (matchMedia("(hover: hover) and (pointer: fine)").matches) input?.focus();
+}
+
+let decryptGeneration = 0;
+
 async function initPageViewer() {
+  const generation = ++decryptGeneration;
   preserveHashOnBurnReveal();
   initPx0Data();
   startExpiryCountdown();
@@ -256,59 +294,7 @@ async function initPageViewer() {
   const secretKeyBase64 = window.location.hash.substring(1);
 
   if (!secretKeyBase64) {
-    outputEl.innerHTML = `
-      <div class="unlock-card-wrapper">
-        <div class="unlock-card">
-          <div class="unlock-icon-container">${lockIcon}</div>
-          <h1 class="unlock-title">Decryption Key Required</h1>
-          <p class="unlock-subtitle">This paste is end-to-end encrypted. The key is normally part of the URL (#...), but was missing from your link.</p>
-          <div class="unlock-form-row">
-            <input type="text" id="manualKeyInput" class="unlock-input" placeholder="Paste decryption key…" aria-label="Decryption key" aria-describedby="keyErr" autocomplete="off" spellcheck="false">
-            <button type="button" id="btnDecryptAction" class="btn-unlock-submit">Decrypt</button>
-          </div>
-          <p id="keyErr" class="unlock-err-msg" role="alert"></p>
-        </div>
-      </div>
-    `;
-
-    const keyInput = document.getElementById(
-      "manualKeyInput",
-    ) as HTMLInputElement | null;
-    const btnDecrypt = document.getElementById(
-      "btnDecryptAction",
-    ) as HTMLButtonElement | null;
-    const keyErr = document.getElementById(
-      "keyErr",
-    ) as HTMLParagraphElement | null;
-
-    const tryManualKey = () => {
-      const val = keyInput?.value.trim() ?? "";
-      if (!val) return;
-      if (btnDecrypt) btnDecrypt.disabled = true;
-      const cleanKey = val.startsWith("#") ? val.slice(1) : val;
-      if (window.location.hash === `#${cleanKey}`) {
-        initPageViewer();
-      } else {
-        window.location.hash = cleanKey;
-      }
-      setTimeout(() => {
-        if (btnDecrypt) btnDecrypt.disabled = false;
-      }, 1500);
-    };
-
-    if (btnDecrypt) {
-      btnDecrypt.addEventListener("click", tryManualKey);
-    }
-    if (keyInput) {
-      keyInput.focus();
-      keyInput.addEventListener("input", () => {
-        if (keyErr) keyErr.textContent = "";
-      });
-      keyInput.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") tryManualKey();
-      });
-    }
-
+    showUnlockCard(outputEl);
     return;
   }
 
@@ -331,6 +317,7 @@ async function initPageViewer() {
       cryptoKey,
       ciphertext,
     );
+    if (generation !== decryptGeneration) return;
     const plaintext = new TextDecoder().decode(decrypted);
 
     window.__PX0_DECRYPTED_TEXT__ = plaintext;
@@ -338,58 +325,9 @@ async function initPageViewer() {
     outputEl.innerHTML = renderMarkdown(plaintext);
     revealPasteActions();
     attachCodeBlockCopyButtons();
-  } catch (err) {
-    console.error("Decryption error:", err);
-    outputEl.innerHTML = `
-      <div class="unlock-card-wrapper">
-        <div class="unlock-card">
-          <div class="unlock-icon-container" style="border-color: var(--red-line); color: var(--red); background: var(--red-fill);">${lockIcon}</div>
-          <h1 class="unlock-title">Decryption Failed</h1>
-          <p class="unlock-subtitle">Invalid decryption key or corrupted payload.</p>
-          <div class="unlock-form-row">
-            <input type="text" id="manualKeyInput" class="unlock-input" placeholder="Enter correct key…" aria-label="Decryption key" autocomplete="off" spellcheck="false">
-            <button type="button" id="btnDecryptAction" class="btn-unlock-submit">Try Again</button>
-          </div>
-          <p id="keyErr" class="unlock-err-msg" role="alert">Error: Decryption key is invalid or corrupted.</p>
-        </div>
-      </div>
-    `;
-
-    const keyInput = document.getElementById(
-      "manualKeyInput",
-    ) as HTMLInputElement | null;
-    const btnDecrypt = document.getElementById(
-      "btnDecryptAction",
-    ) as HTMLButtonElement | null;
-    const keyErr = document.getElementById(
-      "keyErr",
-    ) as HTMLParagraphElement | null;
-
-    const retryManualKey = () => {
-      const val = keyInput?.value.trim() ?? "";
-      if (!val) return;
-      if (btnDecrypt) btnDecrypt.disabled = true;
-      const cleanKey = val.startsWith("#") ? val.slice(1) : val;
-      if (window.location.hash === `#${cleanKey}`) {
-        initPageViewer();
-      } else {
-        window.location.hash = cleanKey;
-      }
-      setTimeout(() => {
-        if (btnDecrypt) btnDecrypt.disabled = false;
-      }, 1500);
-    };
-
-    if (btnDecrypt) btnDecrypt.addEventListener("click", retryManualKey);
-    if (keyInput) {
-      keyInput.focus();
-      keyInput.addEventListener("input", () => {
-        if (keyErr) keyErr.textContent = "";
-      });
-      keyInput.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") retryManualKey();
-      });
-    }
+  } catch {
+    if (generation !== decryptGeneration) return;
+    showUnlockCard(outputEl, true);
   }
 }
 

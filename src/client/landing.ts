@@ -25,7 +25,7 @@ function initLanding() {
   ) as HTMLDivElement | null;
   const editorContainer = document.getElementById(
     "editorContainer",
-  ) as HTMLDivElement | null;
+  ) as HTMLElement | null;
   const btnSplit = document.getElementById(
     "btnSplit",
   ) as HTMLButtonElement | null;
@@ -183,7 +183,12 @@ function initLanding() {
   }
 
   function renderLivePreview() {
-    if (!previewPane || !textarea) return;
+    if (
+      !previewPane ||
+      !textarea ||
+      !editorContainer?.classList.contains("split-active")
+    )
+      return;
     previewPane.innerHTML = renderMarkdown(textarea.value);
   }
 
@@ -197,6 +202,7 @@ function initLanding() {
 
   if (btnSplit && editorContainer) {
     btnSplit.addEventListener("click", () => {
+      clearTimeout(previewTimer);
       const isSplit = editorContainer.classList.toggle("split-active");
       btnSplit.classList.toggle("active", isSplit);
       btnSplit.setAttribute("aria-pressed", String(isSplit));
@@ -206,11 +212,18 @@ function initLanding() {
     });
   }
 
+  const encoder = new TextEncoder();
+  let statsTimer: ReturnType<typeof setTimeout> | undefined;
+  function scheduleStats() {
+    clearTimeout(statsTimer);
+    statsTimer = setTimeout(updateStats, 120);
+  }
+
   function updateStats() {
     if (!textarea || !charCount) return;
     const val = textarea.value || "";
     const lines = val ? val.split("\n").length : 0;
-    const byteCount = new TextEncoder().encode(val).byteLength;
+    const byteCount = encoder.encode(val).byteLength;
     // Compact by design: the footer has no room for a full sentence on a
     // 390px phone. Full accounting lives in the tooltip.
     charCount.textContent = `${lines} lines · ${formatBytes(byteCount)}`;
@@ -222,13 +235,43 @@ function initLanding() {
   }
 
   const draftContainer = document.getElementById("draftContainer");
+  const draftStatus = document.getElementById("draftStatus");
+  let previousDraft = "";
+  const draftPreference = document.getElementById(
+    "draftPreference",
+  ) as HTMLInputElement | null;
+  const showDraftStatus = (text: string) => {
+    if (draftStatus) draftStatus.textContent = text;
+  };
+  try {
+    if (draftPreference)
+      draftPreference.checked =
+        sessionStorage.getItem("px0_drafts_disabled") !== "true";
+  } catch {}
+  draftPreference?.addEventListener("change", () => {
+    try {
+      sessionStorage.setItem(
+        "px0_drafts_disabled",
+        String(!draftPreference.checked),
+      );
+    } catch {}
+    if (!draftPreference.checked) {
+      clearTimeout(draftTimer);
+      draftDirty = false;
+      try {
+        localStorage.removeItem("px0_draft");
+        localStorage.removeItem("px0_previous_draft");
+      } catch {}
+      showDraftStatus("Local draft saving off");
+    } else scheduleDraftSave();
+  });
   let draftTimer: ReturnType<typeof setTimeout> | undefined;
 
   let draftDirty = false;
 
   function saveDraft() {
     clearTimeout(draftTimer);
-    if (!textarea || !draftDirty) return;
+    if (!textarea || !draftDirty || draftPreference?.checked === false) return;
     try {
       if (textarea.value.trim()) {
         localStorage.setItem("px0_draft", textarea.value);
@@ -236,11 +279,18 @@ function initLanding() {
         localStorage.removeItem("px0_draft");
       }
       draftDirty = false;
-    } catch {}
+      showDraftStatus(
+        textarea.value.trim() ? "Draft saved on this device" : "",
+      );
+    } catch {
+      showDraftStatus("Draft could not be saved on this device");
+    }
   }
 
   function scheduleDraftSave() {
+    if (draftPreference?.checked === false) return;
     draftDirty = true;
+    showDraftStatus("Saving local draft…");
     clearTimeout(draftTimer);
     draftTimer = setTimeout(saveDraft, 400);
   }
@@ -250,10 +300,72 @@ function initLanding() {
     if (document.visibilityState === "hidden") saveDraft();
   });
 
+  function newPaste(e: Event) {
+    if (!textarea) return;
+    e.preventDefault();
+    clearTimeout(draftTimer);
+    const previous = textarea.value;
+    try {
+      previousDraft = previous;
+      if (previous.trim() && draftPreference?.checked !== false)
+        localStorage.setItem("px0_previous_draft", previous);
+      localStorage.removeItem("px0_draft");
+    } catch {
+      showDraftStatus("Cannot keep a recovery copy on this device");
+      return;
+    }
+    draftDirty = false;
+    textarea.value = "";
+    updateStats();
+    showDraftStatus("");
+    showPreviousDraft();
+    textarea.focus();
+  }
+
+  function showPreviousDraft() {
+    if (!draftContainer || !textarea) return;
+    draftContainer.innerHTML = "";
+    try {
+      const previous =
+        previousDraft ||
+        (draftPreference?.checked !== false
+          ? localStorage.getItem("px0_previous_draft")
+          : null);
+      if (!previous) return;
+      const restore = document.createElement("button");
+      restore.type = "button";
+      restore.className = "draft-discard";
+      restore.textContent = "Restore previous draft";
+      restore.addEventListener("click", () => {
+        const current = textarea.value;
+        textarea.value = previous;
+        previousDraft = current;
+        try {
+          if (current.trim() && draftPreference?.checked !== false)
+            localStorage.setItem("px0_previous_draft", current);
+          else localStorage.removeItem("px0_previous_draft");
+        } catch {}
+        draftContainer.innerHTML = "";
+        updateStats();
+        scheduleDraftSave();
+        textarea.focus();
+      });
+      draftContainer.appendChild(restore);
+    } catch {}
+  }
+  document
+    .querySelector("header .btn-action")
+    ?.addEventListener("click", newPaste);
+  window.addEventListener("px0:new-paste", newPaste);
+
   function checkAndRestoreDraft() {
     if (!textarea) return;
+    showPreviousDraft();
     try {
-      const savedDraft = localStorage.getItem("px0_draft");
+      const savedDraft =
+        draftPreference?.checked !== false
+          ? localStorage.getItem("px0_draft")
+          : null;
       if (savedDraft && !textarea.value) {
         textarea.value = savedDraft;
         updateStats();
@@ -274,6 +386,7 @@ function initLanding() {
               } catch {}
               if (textarea) textarea.value = "";
               updateStats();
+              showDraftStatus("");
               if (draftContainer) draftContainer.innerHTML = "";
             });
         }
@@ -281,15 +394,23 @@ function initLanding() {
     } catch {}
   }
 
+  function replaceText(start: number, end: number, replacement: string) {
+    if (!textarea) return;
+    textarea.focus();
+    textarea.setSelectionRange(start, end);
+    // insertText preserves textarea's native undo stack; setRangeText/value do not.
+    if (!document.execCommand("insertText", false, replacement)) {
+      textarea.setRangeText(replacement, start, end, "end");
+    }
+  }
+
   function wrapSelection(before: string, after: string, defaultText = "") {
     if (!textarea) return;
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
-    const text = textarea.value;
-    const selected = text.substring(start, end) || defaultText;
+    const selected = textarea.value.substring(start, end) || defaultText;
     const replacement = `${before}${selected}${after}`;
-    textarea.value =
-      text.substring(0, start) + replacement + text.substring(end);
+    replaceText(start, end, replacement);
     textarea.selectionStart = start + before.length;
     textarea.selectionEnd = start + before.length + selected.length;
     updateStats();
@@ -317,12 +438,11 @@ function initLanding() {
       e.preventDefault();
       const [, indent, bullet, content] = unorderedMatch;
       if (!content.trim()) {
-        textarea.value = text.substring(0, lineStart) + text.substring(end);
+        replaceText(lineStart, end, "");
         textarea.selectionStart = textarea.selectionEnd = lineStart;
       } else {
         const continuation = `\n${indent}${bullet} `;
-        textarea.value =
-          text.substring(0, start) + continuation + text.substring(end);
+        replaceText(start, end, continuation);
         textarea.selectionStart = textarea.selectionEnd =
           start + continuation.length;
       }
@@ -336,13 +456,12 @@ function initLanding() {
       e.preventDefault();
       const [, indent, numStr, content] = orderedMatch;
       if (!content.trim()) {
-        textarea.value = text.substring(0, lineStart) + text.substring(end);
+        replaceText(lineStart, end, "");
         textarea.selectionStart = textarea.selectionEnd = lineStart;
       } else {
         const nextNum = parseInt(numStr, 10) + 1;
         const continuation = `\n${indent}${nextNum}. `;
-        textarea.value =
-          text.substring(0, start) + continuation + text.substring(end);
+        replaceText(start, end, continuation);
         textarea.selectionStart = textarea.selectionEnd =
           start + continuation.length;
       }
@@ -354,7 +473,7 @@ function initLanding() {
 
   if (textarea) {
     textarea.addEventListener("input", () => {
-      updateStats();
+      scheduleStats();
       scheduleDraftSave();
       if (draftContainer && !textarea.value.trim()) {
         draftContainer.innerHTML = "";
@@ -362,7 +481,12 @@ function initLanding() {
     });
 
     textarea.addEventListener("keydown", (e) => {
-      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey) {
+      if (
+        !e.isComposing &&
+        (e.ctrlKey || e.metaKey) &&
+        !e.altKey &&
+        !e.shiftKey
+      ) {
         const k = e.key.toLowerCase();
         if (k === "b") {
           e.preventDefault();
@@ -417,7 +541,7 @@ function initLanding() {
 
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
-      if (isSubmitting || !textarea || !e2eeToggle) return;
+      if (isSubmitting || form.inert || !textarea || !e2eeToggle) return;
 
       const saveBtn = document.getElementById(
         "saveBtn",
@@ -497,31 +621,49 @@ function initLanding() {
         return;
       }
 
+      setSaveBusy("Saving…");
+      const controller = new AbortController();
+      const uploadTimeout = setTimeout(() => controller.abort(), 30000);
       let res: Response;
+      let responseBody = "";
       try {
         res = await fetch("/api/paste", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ content: payload, ttl: selectedTtl }),
+          body: JSON.stringify({
+            content: payload,
+            ttl: selectedTtl,
+            encrypted: isE2ee,
+          }),
+          signal: controller.signal,
         });
+        responseBody = await res.text();
       } catch {
         // Network failure previously threw past the handler, leaving the Save
         // button stuck disabled with no explanation.
-        fail("Network error — paste not saved. Check your connection.");
+        fail(
+          controller.signal.aborted
+            ? "Save timed out. Your text is still here; the server may have saved it. Check your connection before trying again."
+            : "Network error — paste not saved. Check your connection.",
+        );
         return;
+      } finally {
+        clearTimeout(uploadTimeout);
       }
 
       if (!res.ok) {
-        const errData = (await res.json().catch(() => ({}))) as {
-          error?: string;
-        };
-        fail(errData.error || "Failed to save paste.");
+        let message = "Failed to save paste.";
+        try {
+          const error = JSON.parse(responseBody);
+          if (typeof error?.error === "string") message = error.error;
+        } catch {}
+        fail(message);
         return;
       }
 
       let data: { id?: string; deleteToken?: string };
       try {
-        data = await res.json();
+        data = JSON.parse(responseBody);
         if (
           !data ||
           typeof data.id !== "string" ||
@@ -548,6 +690,7 @@ function initLanding() {
             localStorage.removeItem("px0_draft");
           } catch {}
           if (draftContainer) draftContainer.innerHTML = "";
+          showDraftStatus("Paste saved");
         }
         setSaveBusy(null);
 
@@ -596,9 +739,7 @@ function showSuccessModal(
   overlay.className = "px-modal-overlay";
 
   const securityBadgeHtml =
-    mode === "e2ee"
-      ? `${lockIcon} Zero-Knowledge E2EE`
-      : `${globeSvg} Plaintext`;
+    mode === "e2ee" ? `${lockIcon} Encrypted` : `${globeSvg} Plaintext`;
 
   const expiryBadgeHtml = isBurn
     ? `${flameSvg} Burn After Read (1 View)`
@@ -635,7 +776,7 @@ function showSuccessModal(
       <div class="px-modal-burn-warning">
         <div class="px-burn-warn-icon">${flameSvg}</div>
         <div class="px-burn-warn-text">
-          <strong>One-time view only:</strong> Opening this link will immediately delete the paste. Do not open it if you intend to send it to someone else!
+          <strong>One-time view only:</strong> Revealing this paste permanently deletes it. Send the link to your recipient before revealing it yourself.
         </div>
       </div>
       `
@@ -665,6 +806,8 @@ function showSuccessModal(
   `;
 
   document.body.appendChild(overlay);
+  const form = document.getElementById("pasteForm");
+  if (form) form.inert = true;
 
   const urlInput = document.getElementById(
     "pxPasteUrl",
@@ -689,13 +832,16 @@ function showSuccessModal(
 
   const closeModal = () => {
     activeModalClose = null;
+    if (form) form.inert = false;
     document.removeEventListener("keydown", handleKeydown);
     overlay.classList.add("closing");
     setTimeout(() => {
       overlay.remove();
       if (
         previousActiveElement &&
-        typeof previousActiveElement.focus === "function"
+        typeof previousActiveElement.focus === "function" &&
+        (document.activeElement === document.body ||
+          overlay.contains(document.activeElement))
       ) {
         previousActiveElement.focus();
       }
@@ -715,6 +861,12 @@ function showSuccessModal(
           if (copyText) copyText.textContent = "Copy";
         }, 2000);
       }
+    } else {
+      if (copyText) copyText.textContent = "Select & copy";
+      copyBtn?.setAttribute(
+        "title",
+        "Copy failed. Select the link and copy it manually.",
+      );
     }
   };
 
@@ -770,7 +922,8 @@ function showSuccessModal(
   });
 
   document.getElementById("pxModalNewBtn")?.addEventListener("click", () => {
-    window.location.href = "/";
+    closeModal();
+    window.dispatchEvent(new Event("px0:new-paste"));
   });
 }
 

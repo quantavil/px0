@@ -8,5 +8,31 @@
       "binding": "PASTES_KV",
       "id": "e868e47dfd544e4f893f011fb6cbe123"
     }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "PASTE_STORE",
+        "class_name": "PasteStore"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "PasteStore"
+      ]
+    }
+  ],
+  "ratelimits": [
+    {
+      "name": "PASTE_RATE_LIMITER",
+      "namespace_id": "1001",
+      "simple": {
+        "limit": 30,
+        "period": 60
+      }
+    }
   ]
 }
