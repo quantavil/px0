@@ -559,7 +559,15 @@ function initLanding() {
         !textarea.value &&
         window.matchMedia("(hover: hover) and (pointer: fine)").matches
       ) {
-        textarea.focus();
+        // Focus needs layout. Let the browser paint the initialized page first
+        // instead of forcing layout during script evaluation.
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            if (!textarea.value && document.activeElement === document.body) {
+              textarea.focus({ preventScroll: true });
+            }
+          });
+        });
       }
     } catch {}
   }
