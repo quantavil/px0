@@ -20,11 +20,11 @@ test.describe('px0 E2E Browser Test Suite', () => {
 
     await expect(page.locator('#charCount')).toContainText('3 lines');
 
-    // Test Tab key handling in textarea
+    // Tab navigates to the footer without changing the paste.
     await textarea.focus();
     await page.keyboard.press('Tab');
-    const value = await textarea.inputValue();
-    expect(value).toContain('  ');
+    await expect(textarea).not.toBeFocused();
+    await expect(textarea).toHaveValue('Line 1\nLine 2\nLine 3');
   });
 
   test('2. Plaintext Paste submission, sugar-high lexical code highlighting and client/server rendering', async ({ page }) => {

@@ -620,7 +620,7 @@ export const MARKDOWN_CSS = `
 
 // Landing page editor, live split preview, footer bar and share banner
 export const LANDING_CSS = `
-  body { overflow: hidden; }
+  body { height: 100vh; height: 100dvh; overflow: hidden; }
 
   /* Mobile scrolls so the keyboard can't trap the Save bar. */
   @media (max-width: 640px) {
@@ -843,7 +843,10 @@ export const LANDING_CSS = `
 
   textarea {
     width: 100%;
-    height: 100%;
+    height: auto;
+    min-height: 0;
+    min-width: 0;
+    overflow-y: auto;
     flex: 1;
     background: transparent;
     border: none;
@@ -858,8 +861,9 @@ export const LANDING_CSS = `
 
   textarea::placeholder { color: var(--text-dim); }
 
-  /* No focus outline on the editor; the caret is the indicator. */
+  /* Keep the editor quiet while making keyboard focus visible. */
   textarea:focus { outline: none; }
+  textarea:focus-visible { box-shadow: inset 2px 0 var(--amber-line); }
 
   .preview-pane {
     display: none;

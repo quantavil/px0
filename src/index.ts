@@ -293,7 +293,7 @@ app.get("/", (c) => {
             <div class="footer-left">
               <div class="mode-seg" role="group" aria-label="Paste mode">
                 <label class="seg-option" title="Store as-is — anyone with the link can read it">
-                  <input type="radio" name="mode" id="modePlaintext" checked>
+                  <input type="radio" name="mode" id="modePlaintext" aria-label="Plaintext" checked>
                   <span class="badge badge-public" id="modePlaintextLabel">${raw(globeSvg)}<span class="seg-full">Plaintext</span><span class="seg-short" aria-hidden="true">Plain</span></span>
                 </label>
                 <label class="seg-option" title="Zero-knowledge encrypted: the key never leaves your browser">

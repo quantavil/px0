@@ -224,19 +224,31 @@ function initLanding() {
   const draftContainer = document.getElementById("draftContainer");
   let draftTimer: ReturnType<typeof setTimeout> | undefined;
 
-  function scheduleDraftSave() {
+  let draftDirty = false;
+
+  function saveDraft() {
     clearTimeout(draftTimer);
-    draftTimer = setTimeout(() => {
-      if (!textarea) return;
-      try {
-        if (textarea.value.trim()) {
-          localStorage.setItem("px0_draft", textarea.value);
-        } else {
-          localStorage.removeItem("px0_draft");
-        }
-      } catch {}
-    }, 400);
+    if (!textarea || !draftDirty) return;
+    try {
+      if (textarea.value.trim()) {
+        localStorage.setItem("px0_draft", textarea.value);
+      } else {
+        localStorage.removeItem("px0_draft");
+      }
+      draftDirty = false;
+    } catch {}
   }
+
+  function scheduleDraftSave() {
+    draftDirty = true;
+    clearTimeout(draftTimer);
+    draftTimer = setTimeout(saveDraft, 400);
+  }
+
+  window.addEventListener("pagehide", saveDraft);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") saveDraft();
+  });
 
   function checkAndRestoreDraft() {
     if (!textarea) return;
@@ -255,6 +267,8 @@ function initLanding() {
           document
             .getElementById("discardDraftBtn")
             ?.addEventListener("click", () => {
+              clearTimeout(draftTimer);
+              draftDirty = false;
               try {
                 localStorage.removeItem("px0_draft");
               } catch {}
@@ -283,9 +297,17 @@ function initLanding() {
   }
 
   function handleListContinuation(e: KeyboardEvent) {
-    if (!textarea || e.key !== "Enter" || e.shiftKey || e.ctrlKey || e.metaKey)
+    if (
+      !textarea ||
+      e.isComposing ||
+      e.key !== "Enter" ||
+      e.shiftKey ||
+      e.ctrlKey ||
+      e.metaKey
+    )
       return;
     const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
     const text = textarea.value;
     const lineStart = text.lastIndexOf("\n", start - 1) + 1;
     const currentLine = text.substring(lineStart, start);
@@ -295,12 +317,12 @@ function initLanding() {
       e.preventDefault();
       const [, indent, bullet, content] = unorderedMatch;
       if (!content.trim()) {
-        textarea.value = text.substring(0, lineStart) + text.substring(start);
+        textarea.value = text.substring(0, lineStart) + text.substring(end);
         textarea.selectionStart = textarea.selectionEnd = lineStart;
       } else {
         const continuation = `\n${indent}${bullet} `;
         textarea.value =
-          text.substring(0, start) + continuation + text.substring(start);
+          text.substring(0, start) + continuation + text.substring(end);
         textarea.selectionStart = textarea.selectionEnd =
           start + continuation.length;
       }
@@ -314,13 +336,13 @@ function initLanding() {
       e.preventDefault();
       const [, indent, numStr, content] = orderedMatch;
       if (!content.trim()) {
-        textarea.value = text.substring(0, lineStart) + text.substring(start);
+        textarea.value = text.substring(0, lineStart) + text.substring(end);
         textarea.selectionStart = textarea.selectionEnd = lineStart;
       } else {
         const nextNum = parseInt(numStr, 10) + 1;
         const continuation = `\n${indent}${nextNum}. `;
         textarea.value =
-          text.substring(0, start) + continuation + text.substring(start);
+          text.substring(0, start) + continuation + text.substring(end);
         textarea.selectionStart = textarea.selectionEnd =
           start + continuation.length;
       }
@@ -340,20 +362,6 @@ function initLanding() {
     });
 
     textarea.addEventListener("keydown", (e) => {
-      if (e.key === "Tab") {
-        e.preventDefault();
-        const start = textarea.selectionStart;
-        const end = textarea.selectionEnd;
-        textarea.value =
-          textarea.value.substring(0, start) +
-          "  " +
-          textarea.value.substring(end);
-        textarea.selectionStart = textarea.selectionEnd = start + 2;
-        updateStats();
-        scheduleDraftSave();
-        return;
-      }
-
       if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey) {
         const k = e.key.toLowerCase();
         if (k === "b") {
@@ -439,6 +447,7 @@ function initLanding() {
       const text = textarea.value;
       const isE2ee = isE2eeMode();
       const selectedTtl = ttlInput ? ttlInput.value : "1d";
+      const ttlLabel = ttlValue?.textContent?.trim() || "1 Day";
 
       setSaveBusy(isE2ee ? "Encrypting…" : "Saving…");
 
@@ -510,16 +519,36 @@ function initLanding() {
         return;
       }
 
-      const data = (await res.json()) as { id: string; deleteToken?: string };
+      let data: { id?: string; deleteToken?: string };
+      try {
+        data = await res.json();
+        if (
+          !data ||
+          typeof data.id !== "string" ||
+          !/^[A-Za-z0-9_-]{1,64}$/.test(data.id)
+        ) {
+          fail("Invalid server response: missing paste ID. Try saving again.");
+          return;
+        }
+      } catch {
+        fail("Invalid server response. Try saving again.");
+        return;
+      }
       if (data.id) {
         if (data.deleteToken) {
           try {
             localStorage.setItem(`px0_del_${data.id}`, data.deleteToken);
           } catch {}
         }
-        try {
-          localStorage.removeItem("px0_draft");
-        } catch {}
+        // Preserve edits made while the request was in flight.
+        if (textarea.value === text) {
+          clearTimeout(draftTimer);
+          draftDirty = false;
+          try {
+            localStorage.removeItem("px0_draft");
+          } catch {}
+          if (draftContainer) draftContainer.innerHTML = "";
+        }
         setSaveBusy(null);
 
         const pasteUrl = `/${data.id}${
@@ -527,7 +556,6 @@ function initLanding() {
         }`;
 
         const modeType = isE2ee ? "e2ee" : "plaintext";
-        const ttlLabel = ttlValue?.textContent?.trim() || "1 Day";
 
         showSuccessModal(pasteUrl, selectedTtl === "burn", modeType, ttlLabel);
       } else {

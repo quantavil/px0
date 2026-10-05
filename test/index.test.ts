@@ -586,7 +586,9 @@ describe("Hono Security & Route Handlers", () => {
     expect(landingRes.status).toBe(200);
     const landingHtml = await landingRes.text();
     // Plaintext radio checked, E2EE off; all optionals live in the footer.
-    expect(landingHtml).toContain('id="modePlaintext" checked');
+    expect(landingHtml).toMatch(
+      /<input[^>]*id="modePlaintext"[^>]*\bchecked\b/,
+    );
     expect(landingHtml).toContain('id="e2eeToggle"');
     expect(landingHtml).toContain('id="ttlDropdown"');
     expect(landingHtml).toContain('id="btnSplit"');
