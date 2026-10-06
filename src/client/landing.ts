@@ -881,6 +881,26 @@ function initLanding() {
     });
   }
 
+  // Prevent browser default file open (navigation to file:///) on window drops
+  window.addEventListener("dragover", (e) => {
+    if (e.dataTransfer?.types.includes("Files")) {
+      e.preventDefault();
+    }
+  });
+
+  window.addEventListener("drop", (e) => {
+    if (e.dataTransfer?.types.includes("Files")) {
+      e.preventDefault();
+      // If dropped outside editorContainer, gracefully upload image files
+      if (!editorContainer?.contains(e.target as Node)) {
+        const rawFiles = extractImageFiles(e.dataTransfer);
+        if (rawFiles.length > 0) {
+          handleFilesUpload(rawFiles);
+        }
+      }
+    }
+  });
+
   if (textarea) {
     textarea.addEventListener("paste", (e) => {
       const imgFiles = extractImageFiles(e.clipboardData);
