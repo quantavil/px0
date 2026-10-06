@@ -9,6 +9,12 @@ export const imageRateLimitMap = new Map<
 >();
 
 /**
+ * Upstream Catbox request timeout in milliseconds.
+ * Default is 15,000ms (15s) to allow multi-megabyte image uploads to succeed reliably.
+ */
+export const CATBOX_TIMEOUT_MS = 15000;
+
+/**
  * Detect image type by inspecting file magic numbers (byte signatures).
  * Rejects SVG, HTML, scripts, PDFs, and any unsupported format.
  */

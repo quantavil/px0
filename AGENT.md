@@ -6,10 +6,13 @@
 - `src/client/shared.ts`: Lightweight client utilities (clipboard, base64url, time formatting, URL validation).
 - `src/client/preview.ts`: Dedicated lazy-loaded preview module with marked parser, sugar-high syntax highlighting, and DOMPurify sanitization.
 - `src/utils.ts`: Short ID generator, base64url codecs, TTL maps, `__PX0_*` sentinel prefixes.
+- `src/image.ts`: Image type sniffing (magic bytes), URL validator, upload rate limiter state, and timeout constants.
 - `src/icons.ts`: Zero-dependency SVG stroke icons.
 - `src/styles.ts`: Obsidian theme CSS tokens (`CSS_VARIABLES`) and component stylesheets; minified during build via Bun into `public/*.min.css`.
 - `test/index.test.ts`: Bun unit test suite (47 tests).
+- `test/image.test.ts`: Bun unit test suite for image format validation, rate limits, and Catbox upload proxy (32 tests).
 - `e2e/pastebin.spec.ts`: Playwright real-browser integration suite (16 tests).
+- `e2e/image-upload.spec.ts`: Playwright browser suite for image upload, drag-and-drop, paste, and accessibility (16 tests).
 - `.github/workflows/ci.yml`: CI workflow validating lint, types, client build drift, and tests.
 
 ## Critical Blunders & Learnings
@@ -30,3 +33,6 @@
 - **CSS Minification Build Cycle:** Statically importing generated `public/*.min.css` in `src/styles.ts` breaks `build:css` on fresh clones. Fix: Keep `src/styles.ts` as pure source styles and import minified assets directly in `src/index.ts`.
 - **Decryption vs Preview Script Isolation:** Load `/static/preview.js` only after successful decryption. Network failures must never report "Decryption Failed" or hide actions. Display at most `MAX_RENDER_CHARS` as safe preformatted text; preserve full copy/download content.
 - **Generated Asset Drift:** CI runs `bun run build` before checking `public/`, covering both client JavaScript and minified CSS.
+- **Catbox Proxy Timeout & Ingestion:** Image uploads larger than a few hundred KB hit strict 5s upstream aborts. Fix: Use 15s default (`CATBOX_TIMEOUT_MS = 15000`) with dynamic binding lookup (`c.env.CATBOX_TIMEOUT_MS`), 25s client abort guard, and contextual status code error mapping (504/413) instead of blindly blaming Catbox as unreachable.
+- **Image Magic Byte Sniffing & URL Whitelisting:** File extensions and Content-Type can be spoofed. Fix: Deeply inspect byte magic numbers (PNG, JPEG, GIF, WebP) rejecting SVG/HTML/scripts to prevent stored XSS, and strictly validate upstream response against `https://files.catbox.moe/` regex.
+- **Catbox Public Nature Transparency:** Catbox uploads are public third-party hosted files and not covered by client-side E2EE or paste deletion/burn. Disclose this prominently via UI popover and modal.

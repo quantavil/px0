@@ -658,18 +658,8 @@ function initLanding() {
 
         // Format validation (PNG, JPEG, WebP, GIF only)
         const allowedExtensions = /\.(png|jpe?g|webp|gif)$/i;
-        const allowedMimes = [
-          "image/png",
-          "image/jpeg",
-          "image/jpg",
-          "image/pjpeg",
-          "image/x-png",
-          "image/jfif",
-          "image/webp",
-          "image/gif",
-        ];
         const isAllowed =
-          allowedMimes.includes(file.type.toLowerCase()) ||
+          /^(image\/(png|jpe?g|webp|gif|pjpeg|x-png|jfif))$/i.test(file.type) ||
           allowedExtensions.test(file.name);
 
         if (!isAllowed) {
@@ -683,7 +673,7 @@ function initLanding() {
         formData.append("file", file, file.name || "image.png");
 
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 12000);
+        const timeout = setTimeout(() => controller.abort(), 25000);
 
         let res: Response;
         let data: { url?: string; error?: string };
@@ -716,7 +706,11 @@ function initLanding() {
         if (!res.ok || !data.url) {
           setSaveError(
             data.error ||
-              "Catbox image host is currently unreachable. Please try again later.",
+              (res.status === 504
+                ? "Image upload timed out. Catbox may be down."
+                : res.status === 413
+                  ? "Image exceeds 5MB limit."
+                  : "Catbox image host is currently unreachable. Please try again later."),
           );
           continue;
         }

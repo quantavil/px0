@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import {
+  CATBOX_TIMEOUT_MS,
   detectImageType,
   imageRateLimitMap,
   MAX_IMAGE_BYTES,
@@ -426,14 +427,18 @@ describe("POST /api/image Endpoint", () => {
       "test.png",
     );
 
-    const res = await app.request("/api/image", {
-      method: "POST",
-      body: formData,
-    });
+    const res = await app.request(
+      "/api/image",
+      {
+        method: "POST",
+        body: formData,
+      },
+      { CATBOX_TIMEOUT_MS: 50 },
+    );
     expect(res.status).toBe(504);
     const json = (await res.json()) as { error: string };
     expect(json.error).toBe("Image upload timed out. Catbox may be down.");
-  }, 10000);
+  });
 
   test("rate limiter returns 429 after 20 image uploads per minute", async () => {
     mockFetch(async () => {
@@ -469,6 +474,35 @@ describe("POST /api/image Endpoint", () => {
     const res = await app.request("/");
     const csp = res.headers.get("Content-Security-Policy") || "";
     expect(csp).toContain("img-src 'self' data: https://files.catbox.moe");
+  });
+
+  test("accepts arbitrary multipart form field name via fallback", async () => {
+    mockFetch(async () => {
+      return new Response("https://files.catbox.moe/fallback_field.png", {
+        status: 200,
+        headers: { "Content-Type": "text/plain" },
+      });
+    });
+
+    const formData = new FormData();
+    formData.append(
+      "custom_photo",
+      new Blob([pngBytes as unknown as BlobPart], { type: "image/png" }),
+      "test.png",
+    );
+
+    const res = await app.request("/api/image", {
+      method: "POST",
+      body: formData,
+    });
+
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as { url: string };
+    expect(json.url).toBe("https://files.catbox.moe/fallback_field.png");
+  });
+
+  test("CATBOX_TIMEOUT_MS is positive number", () => {
+    expect(CATBOX_TIMEOUT_MS).toBeGreaterThan(0);
   });
 
   test("GET /i/:file returns 404 since self-hosted image serving is disabled", async () => {

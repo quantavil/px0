@@ -17,6 +17,7 @@
   - `Ctrl/Cmd+K`: Wraps selected text in `[link](url)`.
 - **Live Encoded Byte Counter**: Footer counter tracks lines and live UTF-8 byte payload weight against the 5MB ceiling: `›_ 12 lines (3.4 KB / 5MB)`.
 - **Bundled TypeScript Client**: Client-side logic ([src/client/](src/client/)) is written in 100% typed TypeScript and minified via Bun into static JS assets served at `/static/*.js`. Eliminates raw inline script template strings and prevents script-breakout XSS by design.
+- **Anonymous Image Upload**: Upload images directly into pastes via toolbar button, file drag-and-drop, clipboard paste (`Ctrl/Cmd+V`), or mobile keyboard insertion (`beforeinput`). Proxies anonymously to Catbox.moe with byte-level magic number verification (PNG, JPEG, WebP, GIF only; SVGs blocked for security), strict URL whitelisting, and a rate limiter. Transparent UI disclosures inform users that uploaded images are public on Catbox and bypass E2EE and expiration.
 - **Burn-After-Read Self-Destruct**: Pastes configured with `Burn once` delete automatically from memory/KV immediately upon the first view, with bot-prefetch protection and an interstitial confirmation before consuming.
 - **Download as Markdown**: Every paste view offers a Download button that saves the content as `<id>.md`. Works on E2EE pastes by writing the text decrypted in the browser.
 - **CLI-Friendly Creation**: `POST /api/paste` accepts raw binary/text payloads as well as JSON, so a file can be piped straight from a terminal without escaping:
@@ -41,7 +42,7 @@
 - **Markdown Engine**: [marked](https://marked.js.org)
 - **Syntax Highlighter**: [sugar-high](https://github.com/huozhi/sugar-high)
 - **Encryption**: Web Crypto API (`AES-GCM` 256-bit)
-- **Testing**: [Playwright](https://playwright.dev) (16 E2E browser tests) & Bun Test (48 Unit/Integration tests)
+- **Testing**: [Playwright](https://playwright.dev) (62 E2E browser tests) & Bun Test (97 Unit/Integration tests)
 
 ---
 
@@ -86,14 +87,14 @@ bun run check
 # Lint & format code using Biome
 bun run lint
 
-# Run Bun unit & integration test suite (48 tests)
+# Run Bun unit & integration test suite (97 tests across 5 test suites)
 bun run test
 
-# Run Playwright E2E browser test suite (Headless - 16 tests)
-bun run test:e2e
+# Run Miniflare Worker integration checks (12 checks)
+bun run test:worker
 
-# Run Playwright E2E browser test suite (Headed - 16 tests)
-bun run test:e2e --headed
+# Run Playwright E2E browser test suite (62 tests)
+bun run test:e2e
 ```
 
 ---

@@ -32,6 +32,7 @@ import {
   trashIcon,
 } from "./icons";
 import {
+  CATBOX_TIMEOUT_MS,
   detectImageType,
   imageRateLimitMap,
   MAX_IMAGE_BYTES,
@@ -457,11 +458,27 @@ app.post("/api/image", async (c) => {
     } catch {
       return c.json({ error: "Invalid form data" }, 400);
     }
-    const file =
-      formData.get("file") ??
-      formData.get("image") ??
-      formData.get("fileToUpload");
-    if (!file || typeof file === "string") {
+    let file: Blob | null = null;
+    for (const key of ["file", "image", "fileToUpload"]) {
+      const val = formData.get(key);
+      if (val && typeof val !== "string" && (val as unknown) instanceof Blob) {
+        file = val as Blob;
+        break;
+      }
+    }
+    if (!file) {
+      for (const val of formData.values()) {
+        if (
+          val &&
+          typeof val !== "string" &&
+          (val as unknown) instanceof Blob
+        ) {
+          file = val as Blob;
+          break;
+        }
+      }
+    }
+    if (!file) {
       return c.json({ error: "No image file provided" }, 400);
     }
     bytes = new Uint8Array(await file.arrayBuffer());
@@ -513,8 +530,19 @@ app.post("/api/image", async (c) => {
     `image.${ext}`,
   );
 
+  const timeoutMs = Math.max(
+    1,
+    Number(
+      (c.env as { CATBOX_TIMEOUT_MS?: string | number } | undefined)
+        ?.CATBOX_TIMEOUT_MS ??
+        (typeof process !== "undefined"
+          ? process.env?.CATBOX_TIMEOUT_MS
+          : undefined),
+    ) || CATBOX_TIMEOUT_MS,
+  );
+
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 5000);
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   const onClientAbort = () => controller.abort();
   if (c.req.raw.signal?.aborted) {
     controller.abort();
