@@ -35,6 +35,60 @@ test.describe("Client-Side WebP Image Compression & Reference Link Insertion", (
     await expect(viewerImg).toBeVisible();
   });
 
+  test("large image draft exceeding 20,000 characters renders image in preview and viewer without triggering large-paste note", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    const largeDataUrl = `data:image/webp;base64,${"UklGR".repeat(5000)}`;
+    const md = `![photo][fig-1]\n\n[fig-1]: ${largeDataUrl}\n`;
+    expect(md.length).toBeGreaterThan(20000);
+
+    const editor = page.locator("#content");
+    await editor.evaluate((el: HTMLTextAreaElement, val: string) => {
+      el.value = val;
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    }, md);
+
+    await page.locator("#btnSplit").click();
+    await expect(page.locator("#previewPane")).not.toContainText("Large paste");
+    const previewImg = page.locator('#previewPane img[src^="data:image/"]');
+    await expect(previewImg).toBeVisible();
+
+    await page.locator("#saveBtn").click();
+    const pasteUrl = await page.locator("#pxPasteUrl").inputValue();
+    await page.goto(pasteUrl);
+    await expect(page.locator("#output")).not.toContainText("Large paste");
+    const viewerImg = page.locator('#output img[src^="data:image/"]');
+    await expect(viewerImg).toBeVisible();
+  });
+
+  test("large image draft in E2EE mode decrypts and renders image in browser viewer without large-paste note", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    const largeDataUrl = `data:image/webp;base64,${"UklGR".repeat(5000)}`;
+    const md = `![encrypted photo][fig-1]\n\n[fig-1]: ${largeDataUrl}\n`;
+
+    const editor = page.locator("#content");
+    await editor.evaluate((el: HTMLTextAreaElement, val: string) => {
+      el.value = val;
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    }, md);
+
+    await page.locator('label:has(#e2eeToggle)').click();
+    await expect(page.locator("#e2eeToggle")).toBeChecked();
+
+    await page.locator("#saveBtn").click();
+    await expect(page.locator("#pxPasteUrl")).toHaveValue(/#/);
+    const pasteUrl = await page.locator("#pxPasteUrl").inputValue();
+
+    await page.goto(pasteUrl);
+    await expect(page.locator("#output")).not.toContainText("Large paste");
+    const viewerImg = page.locator('#output img[src^="data:image/"]');
+    await expect(viewerImg).toBeVisible();
+    await expect(viewerImg).toHaveAttribute("alt", "encrypted photo");
+  });
+
   test("pasting clipboard image compresses and inserts reference link; normal text paste is unaffected", async ({
     page,
   }) => {

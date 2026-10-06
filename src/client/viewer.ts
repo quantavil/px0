@@ -5,6 +5,7 @@ import {
   copyToClipboard,
   flashCopied,
   formatTimeLeft,
+  stripRasterDataUrls,
 } from "./shared";
 
 declare global {
@@ -339,7 +340,7 @@ async function initPageViewer() {
     if (generation !== decryptGeneration) return;
     console.error("Failed to load preview renderer:", err);
     outputEl.innerHTML = "";
-    if (plaintext.length > MAX_RENDER_CHARS) {
+    if (stripRasterDataUrls(plaintext).length > MAX_RENDER_CHARS) {
       const note = document.createElement("p");
       note.className = "large-paste-note";
       note.textContent =

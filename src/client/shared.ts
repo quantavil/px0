@@ -23,22 +23,26 @@ function decodeEntities(s: string): string {
     )
     .replace(/&#([0-9]+);?/g, (_: string, dec: string) =>
       String.fromCharCode(parseInt(dec, 10)),
-    );
+    )
+    .replace(/&(?:tab|newline);?/gi, " ");
 }
 
 function normalizeForSchemeCheck(s: string): string {
-  const decoded = decodeEntities(s);
+  const decoded = s.includes("&") ? decodeEntities(s) : s;
   let out = "";
   for (let i = 0; i < decoded.length; i++) {
     const code = decoded.charCodeAt(i);
-    if (code > 32 && code !== 127) out += decoded[i];
+    if (code > 32 && code !== 127) {
+      out += decoded[i];
+      if (out.length >= 256) break;
+    }
   }
   return out.toLowerCase();
 }
 
 // CSP allows data: images; raster ones are safe, svg/html are not.
 function isAllowedDataUrl(normalized: string): boolean {
-  return /^data:image\/(png|jpeg|gif|webp|avif);/.test(normalized);
+  return /^data:image\/(?:png|jpe?g|gif|webp|avif);/.test(normalized);
 }
 
 export function isDangerousUrl(rawVal: string): boolean {
@@ -64,6 +68,16 @@ export function isDangerousSrcset(rawVal: string): boolean {
     if (isDangerousUrl(urlToken)) return true;
   }
   return false;
+}
+
+// Matches raster image data URIs (PNG, JPEG, WebP, GIF, AVIF) in base64 or plaintext.
+// Embedded data URIs can be hundreds of kilobytes without creating DOM nodes.
+const RASTER_DATA_URL_REGEX =
+  /data:image\/(?:png|jpe?g|webp|gif|avif)[^\s'")>]+/gi;
+
+export function stripRasterDataUrls(text: string): string {
+  if (!/data:image\//i.test(text)) return text;
+  return text.replace(RASTER_DATA_URL_REGEX, "");
 }
 
 export async function copyToClipboard(text: string): Promise<boolean> {

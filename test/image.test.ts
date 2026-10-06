@@ -115,4 +115,75 @@ Second image:
     expect(out).not.toContain("javascript:");
     expect(out).not.toContain("alert(1)");
   });
+
+  test("renders large WebP image data URI (>20KB) without triggering large-paste excerpt", () => {
+    // 25KB WebP data URL simulating an actual compressed screenshot
+    const largeDataUrl = `data:image/webp;base64,${"UklGR".repeat(5000)}`;
+    expect(largeDataUrl.length).toBeGreaterThan(20000);
+
+    const md = `
+# My Screenshot
+
+Here is the uploaded image:
+![uploaded screenshot][fig-1]
+
+[fig-1]: ${largeDataUrl}
+`.trim();
+
+    const rendered = renderMarkdown(md);
+    expect(rendered).not.toContain("Large paste");
+    expect(rendered).toContain('alt="uploaded screenshot"');
+    expect(rendered).toContain(`src="${largeDataUrl}"`);
+    expect(rendered).toContain("<img");
+  });
+
+  test("renders inline large WebP image data URI without triggering large-paste excerpt", () => {
+    const largeDataUrl = `data:image/webp;base64,${"UklGR".repeat(5000)}`;
+    const md = `![inline screenshot](${largeDataUrl})`;
+
+    const rendered = renderMarkdown(md);
+    expect(rendered).not.toContain("Large paste");
+    expect(rendered).toContain('alt="inline screenshot"');
+    expect(rendered).toContain(`src="${largeDataUrl}"`);
+  });
+
+  test("bounded excerpt triggers when non-image markdown text exceeds MAX_RENDER_CHARS", () => {
+    const largeDataUrl = `data:image/webp;base64,${"UklGR".repeat(1000)}`;
+    const denseText = "Line of text content here.\n".repeat(1000); // 27,000 chars of text
+    const md = `${denseText}\n![pic][fig-1]\n[fig-1]: ${largeDataUrl}`;
+
+    const rendered = renderMarkdown(md);
+    expect(rendered).toContain("Large paste");
+    expect(rendered).toContain("large-paste-excerpt");
+  });
+
+  test("renders valid data:image/jpg and image/png reference links", () => {
+    const md = `
+![jpg photo][fig-1]
+![png logo][fig-2]
+
+[fig-1]: data:image/jpg;base64,1234
+[fig-2]: data:image/png;base64,5678
+`.trim();
+
+    const rendered = renderMarkdown(md);
+    expect(rendered).toContain('src="data:image/jpg;base64,1234"');
+    expect(rendered).toContain('alt="jpg photo"');
+    expect(rendered).toContain('src="data:image/png;base64,5678"');
+    expect(rendered).toContain('alt="png logo"');
+  });
+
+  test("neutralizes entity-padded whitespace scheme bypasses in image links", () => {
+    const attack = `![pic][fig-1]\n\n[fig-1]: ${"&#32;".repeat(120)}javascript:alert(1)`;
+    const rendered = renderMarkdown(attack);
+    expect(rendered).not.toContain("javascript:");
+    expect(rendered).not.toContain("alert(1)");
+    expect(rendered).not.toContain("<img");
+  });
+
+  test("renders image with empty alt text safely without error", () => {
+    const md = "![](/pic.png)";
+    const rendered = renderMarkdown(md);
+    expect(rendered).toContain('<img src="/pic.png" alt="" loading="lazy"');
+  });
 });

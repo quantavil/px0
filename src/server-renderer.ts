@@ -11,7 +11,7 @@ export function sanitizeOutputHtml(dirty: string): string {
     allowedAttributes: {
       "*": ["class", "title"],
       a: ["href", "target", "rel"],
-      img: ["src", "srcset", "alt", "width", "height"],
+      img: ["src", "srcset", "alt", "width", "height", "loading"],
       input: ["type", "checked", "disabled"],
       ol: ["start"],
       td: ["colspan", "rowspan"],

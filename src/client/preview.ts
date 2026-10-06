@@ -3,7 +3,11 @@ import { marked } from "marked";
 import { highlight } from "sugar-high";
 import { lang } from "sugar-high/lang";
 import { MAX_RENDER_CHARS, sanitizeHtml } from "../utils";
-import { isDangerousSrcset, isDangerousUrl } from "./shared";
+import {
+  isDangerousSrcset,
+  isDangerousUrl,
+  stripRasterDataUrls,
+} from "./shared";
 
 // Browser DOMPurify policy: dangerous tags/style/handlers gone,
 // URIs enforced by hook below (raster data: images only).
@@ -36,6 +40,7 @@ const PURIFY_CONFIG = {
     "disabled",
     "alt",
     "title",
+    "loading",
   ],
 };
 
@@ -100,6 +105,14 @@ marked.use({
       const titleAttr = title ? ` title="${sanitizeHtml(title)}"` : "";
       return `<a href="${sanitizeHtml(cleanHref)}"${titleAttr} target="_blank" rel="noopener">${text}</a>`;
     },
+    image({ href, title, text }) {
+      const cleanHref = href ? href.trim() : "";
+      if (!cleanHref || isDangerousUrl(cleanHref)) {
+        return sanitizeHtml(text || "");
+      }
+      const titleAttr = title ? ` title="${sanitizeHtml(title)}"` : "";
+      return `<img src="${sanitizeHtml(cleanHref)}" alt="${sanitizeHtml(text || "")}"${titleAttr} loading="lazy">`;
+    },
   },
 });
 
@@ -108,7 +121,7 @@ export function renderMarkdown(
   sanitize: (html: string) => string = sanitizeOutputHtml,
 ): string {
   if (!md) return "";
-  if (md.length > MAX_RENDER_CHARS) {
+  if (stripRasterDataUrls(md).length > MAX_RENDER_CHARS) {
     return `<p class="large-paste-note">Large paste — showing the first 20,000 characters as text. Copy or download to get the complete paste.</p><pre class="large-paste-excerpt"><code>${sanitizeHtml(md.slice(0, MAX_RENDER_CHARS))}</code></pre>`;
   }
   if (!md.trim()) return "";

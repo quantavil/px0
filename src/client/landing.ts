@@ -320,7 +320,7 @@ function initLanding() {
   function updateStats() {
     if (!textarea || !charCount) return;
     const val = textarea.value || "";
-    const lines = val ? val.split("\n").length : 0;
+    const lines = val ? (val.match(/\n/g)?.length ?? 0) + 1 : 0;
     const byteCount = encoder.encode(val).byteLength;
     // Compact by design: the footer has no room for a full sentence on a
     // 390px phone. Full accounting lives in the tooltip.
