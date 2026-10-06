@@ -168,7 +168,7 @@ describe("Hono Security & Route Handlers", () => {
     const jsText = await res.text();
     expect(jsText.length).toBeGreaterThan(100);
     // Bundle size optimization: landing script is lightweight and does not bundle heavy parsers
-    expect(jsText.length).toBeLessThan(25000);
+    expect(jsText.length).toBeLessThan(30000);
   });
 
   test("GET /static/viewer.js returns minified client viewer script with 200 OK", async () => {

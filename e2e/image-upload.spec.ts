@@ -20,7 +20,10 @@ test.describe("Client-Side WebP Image Compression & Reference Link Insertion", (
 
     const editor = page.locator("#content");
     await expect(editor).toHaveValue(/!\[diagram\]\[fig-1\]/);
-    await expect(editor).toHaveValue(/\[fig-1\]: data:image\/(webp|jpeg);base64,/);
+    await expect(editor).not.toHaveValue(/data:image\//);
+    const tray = page.locator("#attachmentsTray");
+    await expect(tray).toBeVisible();
+    await expect(page.locator(".attachment-chip")).toContainText("diagram");
 
     // Verify it renders in live preview
     await page.locator("#btnSplit").click();
@@ -119,7 +122,9 @@ test.describe("Client-Side WebP Image Compression & Reference Link Insertion", (
     }, ONE_BY_ONE_PNG.toString("base64"));
 
     await expect(editor).toHaveValue(/!\[clip\]\[fig-1\]/);
-    await expect(editor).toHaveValue(/\[fig-1\]: data:image\/(webp|jpeg);base64,/);
+    await expect(editor).not.toHaveValue(/data:image\//);
+    await expect(page.locator("#attachmentsTray")).toBeVisible();
+    await expect(page.locator(".attachment-chip")).toContainText("clip");
   });
 
   test("dragging and dropping an image onto the editor compresses and inserts reference link", async ({
@@ -140,7 +145,9 @@ test.describe("Client-Side WebP Image Compression & Reference Link Insertion", (
 
     const editor = page.locator("#content");
     await expect(editor).toHaveValue(/!\[artwork\]\[fig-1\]/);
-    await expect(editor).toHaveValue(/\[fig-1\]: data:image\/(webp|jpeg);base64,/);
+    await expect(editor).not.toHaveValue(/data:image\//);
+    await expect(page.locator("#attachmentsTray")).toBeVisible();
+    await expect(page.locator(".attachment-chip")).toContainText("artwork");
   });
 
   test("uploading multiple files sequentially inserts reference links for all images with unique fig keys", async ({
@@ -165,8 +172,9 @@ test.describe("Client-Side WebP Image Compression & Reference Link Insertion", (
     const editor = page.locator("#content");
     await expect(editor).toHaveValue(/!\[pic1\]\[fig-1\]/);
     await expect(editor).toHaveValue(/!\[pic2\]\[fig-2\]/);
-    await expect(editor).toHaveValue(/\[fig-1\]: data:image\/(webp|jpeg);base64,/);
-    await expect(editor).toHaveValue(/\[fig-2\]: data:image\/(webp|jpeg);base64,/);
+    await expect(editor).not.toHaveValue(/data:image\//);
+    await expect(page.locator("#attachmentsTray")).toBeVisible();
+    await expect(page.locator(".attachment-chip")).toHaveCount(2);
   });
 
   test("native Undo restores content after image insertion", async ({ page }) => {
@@ -184,8 +192,7 @@ test.describe("Client-Side WebP Image Compression & Reference Link Insertion", (
 
     await expect(editor).toHaveValue(/!\[shot\]\[fig-1\]/);
 
-    // Press Undo inside textarea (first undo removes reference definition, second removes link)
-    await editor.press("ControlOrMeta+z");
+    // Press Undo inside textarea (single undo removes reference link without polluting editor with base64)
     await editor.press("ControlOrMeta+z");
     await expect(editor).toHaveValue("Note before image");
   });
@@ -426,6 +433,47 @@ test.describe("Client-Side WebP Image Compression & Reference Link Insertion", (
     await expect(editor).toHaveValue(/!\[shot\]\[fig-1\]/);
     const saveError = page.locator("#saveError");
     await expect(saveError).toHaveText("");
+  });
+
+  test("clicking remove on an attachment chip removes the chip and reference from editor", async ({
+    page,
+  }) => {
+    await page.goto("/");
+
+    const fileInput = page.locator("#imageInput");
+    await fileInput.setInputFiles({
+      name: "todelete.png",
+      mimeType: "image/png",
+      buffer: ONE_BY_ONE_PNG,
+    });
+
+    const editor = page.locator("#content");
+    await expect(editor).toHaveValue(/!\[todelete\]\[fig-1\]/);
+    await expect(page.locator("#attachmentsTray")).toBeVisible();
+
+    const btnRemove = page.locator(".attachment-btn-remove");
+    await btnRemove.click();
+
+    await expect(page.locator("#attachmentsTray")).toBeHidden();
+    await expect(editor).not.toHaveValue(/!\[todelete\]/);
+  });
+
+  test("pasting markdown with trailing base64 reference links extracts them into attachments tray", async ({
+    page,
+  }) => {
+    await page.goto("/");
+
+    const editor = page.locator("#content");
+    const rawMd = "# Note\n![test][fig-1]\n\n[fig-1]: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==\n";
+    await editor.evaluate((el: HTMLTextAreaElement, val: string) => {
+      el.value = val;
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    }, rawMd);
+
+    await expect(editor).toHaveValue("# Note\n![test][fig-1]");
+    await expect(editor).not.toHaveValue(/data:image/);
+    await expect(page.locator("#attachmentsTray")).toBeVisible();
+    await expect(page.locator(".attachment-chip")).toContainText("test");
   });
 
   test("landing page with image controls passes automated WCAG accessibility checks", async ({

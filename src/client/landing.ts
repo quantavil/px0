@@ -9,6 +9,14 @@ import {
   plusIcon,
 } from "../icons";
 import { ENC_PREFIX, MAX_PASTE_BYTES } from "../utils";
+import {
+  estimateDataUrlBytes,
+  formatBytes,
+  formatMarkdownWithAttachments,
+  getNextFigId,
+  type ImageAttachment,
+  parseAttachments,
+} from "./attachments";
 import { compressImageToWebP } from "./image-compress";
 import { bytesToBase64Url, copyToClipboard, flashCopied } from "./shared";
 
@@ -28,6 +36,15 @@ function initLanding() {
   const charCount = document.getElementById(
     "charCount",
   ) as HTMLSpanElement | null;
+  const attachmentsTray = document.getElementById(
+    "attachmentsTray",
+  ) as HTMLDivElement | null;
+  const attachmentsSummary = document.getElementById(
+    "attachmentsSummary",
+  ) as HTMLSpanElement | null;
+  const attachmentsList = document.getElementById(
+    "attachmentsList",
+  ) as HTMLDivElement | null;
   const e2eeToggle = document.getElementById(
     "e2eeToggle",
   ) as HTMLInputElement | null;
@@ -56,6 +73,86 @@ function initLanding() {
   const saveError = document.getElementById(
     "saveError",
   ) as HTMLSpanElement | null;
+
+  let attachments: ImageAttachment[] = [];
+
+  function getFullContent(): string {
+    if (!textarea) return "";
+    return formatMarkdownWithAttachments(textarea.value, attachments);
+  }
+
+  function renderAttachmentsTray() {
+    if (!attachmentsTray || !attachmentsSummary || !attachmentsList) return;
+    if (attachments.length === 0) {
+      attachmentsTray.hidden = true;
+      attachmentsSummary.textContent = "";
+      attachmentsList.innerHTML = "";
+      return;
+    }
+
+    attachmentsTray.hidden = false;
+    const totalBytes = attachments.reduce((sum, a) => sum + a.byteSize, 0);
+    const countText =
+      attachments.length === 1
+        ? `1 attachment (${formatBytes(totalBytes)})`
+        : `${attachments.length} attachments (${formatBytes(totalBytes)})`;
+    attachmentsSummary.textContent = `📎 ${countText}`;
+    attachmentsList.innerHTML = "";
+
+    for (const att of attachments) {
+      const chip = document.createElement("div");
+      chip.className = "attachment-chip";
+      chip.setAttribute("role", "listitem");
+
+      const thumb = document.createElement("img");
+      thumb.className = "attachment-thumb";
+      thumb.src = att.dataUrl;
+      thumb.alt = att.name;
+      thumb.loading = "lazy";
+
+      const nameSpan = document.createElement("span");
+      nameSpan.className = "attachment-name";
+      nameSpan.textContent = att.name;
+      nameSpan.title = `${att.name} [${att.id}]`;
+
+      const sizeSpan = document.createElement("span");
+      sizeSpan.className = "attachment-size";
+      sizeSpan.textContent = formatBytes(att.byteSize);
+
+      const btnRemove = document.createElement("button");
+      btnRemove.type = "button";
+      btnRemove.className = "attachment-btn-remove";
+      btnRemove.setAttribute("aria-label", `Remove ${att.name}`);
+      btnRemove.title = `Remove ${att.name}`;
+      btnRemove.textContent = "✕";
+
+      btnRemove.addEventListener("click", () => {
+        removeAttachmentItem(att.id);
+      });
+
+      chip.appendChild(thumb);
+      chip.appendChild(nameSpan);
+      chip.appendChild(sizeSpan);
+      chip.appendChild(btnRemove);
+      attachmentsList.appendChild(chip);
+    }
+  }
+
+  function removeAttachmentItem(id: string) {
+    attachments = attachments.filter((a) => a.id !== id);
+    if (textarea) {
+      const refRegex = new RegExp(`\\n*!\\[[^\\]]*\\]\\[${id}\\]\\n*`, "g");
+      if (refRegex.test(textarea.value)) {
+        textarea.value = textarea.value.replace(refRegex, "\n").trim();
+      }
+    }
+    renderAttachmentsTray();
+    updateStats();
+    scheduleDraftSave();
+    if (editorContainer?.classList.contains("split-active")) {
+      scheduleLivePreview();
+    }
+  }
 
   let uploadStatusTimer: ReturnType<typeof setTimeout> | undefined;
   let saveErrorTimer: ReturnType<typeof setTimeout> | undefined;
@@ -220,14 +317,6 @@ function initLanding() {
     });
   }
 
-  // Radios share one name, so the browser keeps them exclusive with no JS sync.
-
-  function formatBytes(bytes: number): string {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
-  }
-
   // Plaintext is the default; the user opts into E2EE per paste.
   function isE2eeMode() {
     return e2eeToggle?.checked ?? false;
@@ -257,7 +346,7 @@ function initLanding() {
     )
       return;
     const currentGen = ++renderGeneration;
-    const text = textarea.value;
+    const text = getFullContent();
     try {
       const render = await loadPreviewRenderer();
       if (
@@ -320,8 +409,9 @@ function initLanding() {
   function updateStats() {
     if (!textarea || !charCount) return;
     const val = textarea.value || "";
+    const full = getFullContent();
     const lines = val ? (val.match(/\n/g)?.length ?? 0) + 1 : 0;
-    const byteCount = encoder.encode(val).byteLength;
+    const byteCount = encoder.encode(full).byteLength;
     // Compact by design: the footer has no room for a full sentence on a
     // 390px phone. Full accounting lives in the tooltip.
     charCount.textContent = `${lines} lines · ${formatBytes(byteCount)}`;
@@ -372,7 +462,7 @@ function initLanding() {
     clearTimeout(draftTimer);
     if (!textarea || !draftDirty || draftPreference?.checked === false) return;
     try {
-      const val = textarea.value;
+      const val = getFullContent();
       const trimmed = val.trim();
       if (trimmed) {
         localStorage.setItem("px0_draft", val);
@@ -404,7 +494,7 @@ function initLanding() {
     e.preventDefault();
     clearTimeout(draftTimer);
     currentDraftGen++;
-    const previous = textarea.value;
+    const previous = getFullContent();
     try {
       previousDraft = previous;
       if (previous.trim() && draftPreference?.checked !== false)
@@ -416,6 +506,8 @@ function initLanding() {
     }
     draftDirty = false;
     textarea.value = "";
+    attachments = [];
+    renderAttachmentsTray();
     clearUploadStatus();
     clearSaveError();
     updateStats();
@@ -440,8 +532,12 @@ function initLanding() {
       restore.textContent = "Restore previous draft";
       restore.addEventListener("click", () => {
         currentDraftGen++;
-        const current = textarea.value;
-        textarea.value = previous;
+        const current = getFullContent();
+        const { cleanContent, attachments: restored } =
+          parseAttachments(previous);
+        textarea.value = cleanContent;
+        attachments = restored;
+        renderAttachmentsTray();
         previousDraft = current;
         clearUploadStatus();
         clearSaveError();
@@ -472,7 +568,11 @@ function initLanding() {
           ? localStorage.getItem("px0_draft")
           : null;
       if (savedDraft && !textarea.value) {
-        textarea.value = savedDraft;
+        const { cleanContent, attachments: restored } =
+          parseAttachments(savedDraft);
+        textarea.value = cleanContent;
+        attachments = restored;
+        renderAttachmentsTray();
         updateStats();
         if (draftContainer) {
           draftContainer.innerHTML = `
@@ -491,6 +591,8 @@ function initLanding() {
                 localStorage.removeItem("px0_draft");
               } catch {}
               if (textarea) textarea.value = "";
+              attachments = [];
+              renderAttachmentsTray();
               clearUploadStatus();
               clearSaveError();
               updateStats();
@@ -682,17 +784,11 @@ function initLanding() {
               .replace(/[\r\n\t]/g, " ")
               .trim() || "image";
 
-          const val = textarea.value;
-          let highestFig = 0;
-          const figMatches = val.matchAll(/\[fig-(\d+)\]/g);
-          for (const match of figMatches) {
-            const num = parseInt(match[1], 10);
-            if (num > highestFig) highestFig = num;
-          }
-          const figKey = `fig-${highestFig + 1}`;
+          const figKey = getNextFigId(attachments, textarea.value);
 
           const start = textarea.selectionStart;
           const end = textarea.selectionEnd;
+          const val = textarea.value;
 
           const prefix = start > 0 && val[start - 1] !== "\n" ? "\n" : "";
           const suffix = end < val.length && val[end] === "\n" ? "" : "\n";
@@ -702,19 +798,17 @@ function initLanding() {
           replaceText(start, end, refLink);
           const newCursor = textarea.selectionStart;
 
-          const valAfter = textarea.value;
-          const appendSep = valAfter.endsWith("\n\n")
-            ? ""
-            : valAfter.endsWith("\n")
-              ? "\n"
-              : valAfter.length === 0
-                ? ""
-                : "\n\n";
-          const refDef = `${appendSep}[${figKey}]: ${dataUrl}\n`;
-          replaceText(valAfter.length, valAfter.length, refDef);
+          attachments.push({
+            id: figKey,
+            name: cleanName,
+            dataUrl,
+            byteSize: estimateDataUrlBytes(dataUrl),
+          });
+
           textarea.setSelectionRange(newCursor, newCursor);
           textarea.scrollTop = savedScrollTop;
 
+          renderAttachmentsTray();
           updateStats();
           scheduleDraftSave();
         }
@@ -879,9 +973,27 @@ function initLanding() {
 
     textarea.addEventListener("input", () => {
       clearSaveError();
+      if (/\[fig-\d+\]:\s*data:image\//i.test(textarea.value)) {
+        const { cleanContent, attachments: extracted } = parseAttachments(
+          textarea.value,
+        );
+        if (extracted.length > 0) {
+          for (const ext of extracted) {
+            if (!attachments.some((a) => a.id === ext.id)) {
+              attachments.push(ext);
+            }
+          }
+          textarea.value = cleanContent;
+          renderAttachmentsTray();
+        }
+      }
       scheduleStats();
       scheduleDraftSave();
-      if (draftContainer && !textarea.value.trim()) {
+      if (
+        draftContainer &&
+        !textarea.value.trim() &&
+        attachments.length === 0
+      ) {
         draftContainer.innerHTML = "";
       }
     });
@@ -977,13 +1089,14 @@ function initLanding() {
       };
 
       clearSaveError();
-      if (!textarea.value.trim()) {
+      const fullText = getFullContent();
+      if (!fullText.trim()) {
         fail("Nothing to save — the editor is empty.");
         textarea.focus();
         return;
       }
 
-      const text = textarea.value;
+      const text = fullText;
       const isE2ee = isE2eeMode();
       const selectedTtl = ttlInput ? ttlInput.value : "1d";
       const ttlLabel = ttlValue?.textContent?.trim() || "1 Day";
@@ -1098,7 +1211,7 @@ function initLanding() {
           } catch {}
         }
         // Preserve edits made while the request was in flight.
-        if (textarea.value === text) {
+        if (getFullContent() === text) {
           clearTimeout(draftTimer);
           draftDirty = false;
           try {

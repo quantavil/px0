@@ -1319,11 +1319,92 @@ export const LANDING_CSS = `
     padding: 0.15rem 0;
   }
   .save-error:hover { text-decoration: underline; }
+
+  .attachments-tray {
+    width: 100%;
+    max-width: 76rem;
+    margin: 0 auto;
+    padding: 0.6rem 1.2rem;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+  }
+  .attachments-tray[hidden] { display: none; }
+  .attachments-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.76rem;
+    font-family: var(--mono);
+    color: var(--text-muted);
+  }
+  .attachments-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+  }
+  .attachment-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.25rem 0.55rem;
+    font-size: 0.78rem;
+    font-family: var(--mono);
+    color: var(--text);
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+  .attachment-chip:hover { border-color: var(--border-hover); }
+  .attachment-thumb {
+    width: 20px;
+    height: 20px;
+    border-radius: 3px;
+    object-fit: cover;
+    background: rgba(0, 0, 0, 0.3);
+  }
+  .attachment-name {
+    max-width: 180px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .attachment-size {
+    color: var(--text-dim);
+    font-size: 0.72rem;
+  }
+  .attachment-btn-remove {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 0.95rem;
+    line-height: 1;
+    padding: 0 0.25rem;
+    border-radius: 3px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.15s ease, background 0.15s ease;
+  }
+  .attachment-btn-remove:hover {
+    color: var(--red);
+    background: var(--red-fill);
+  }
+
+  @media (max-width: 640px) {
+    .attachments-tray { padding: 0.5rem 0.9rem; }
+  }
+
   @media (pointer: coarse) {
     .btn-action, .util-strip .btn-action, .px-modal-close { width: 44px; height: 44px; }
     .seg-option .badge, .ttl-trigger { min-height: 44px; }
     .privacy-help summary, .draft-discard { min-height: 44px; display: inline-flex; align-items: center; }
     .save-error { min-height: 32px; display: inline-flex; align-items: center; }
+    .attachment-btn-remove { min-width: 28px; min-height: 28px; }
   }
 
 `;

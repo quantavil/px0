@@ -354,6 +354,13 @@ app.get("/", (c) => {
             <div id="previewPane" class="preview-pane" role="region" aria-label="Preview"></div>
           </div>
 
+          <div id="attachmentsTray" class="attachments-tray" hidden aria-label="Attached images">
+            <div class="attachments-header">
+              <span id="attachmentsSummary" class="attachments-summary"></span>
+            </div>
+            <div id="attachmentsList" class="attachments-list" role="list"></div>
+          </div>
+
           <details class="privacy-help">
             <summary>Encryption &amp; local drafts</summary>
             <p>Encrypted pastes need the complete link to read. Drafts are saved unencrypted on this device.</p>
