@@ -66,6 +66,7 @@ function initLanding() {
   ) as HTMLSpanElement | null;
 
   let uploadStatusTimer: ReturnType<typeof setTimeout> | undefined;
+  let saveErrorTimer: ReturnType<typeof setTimeout> | undefined;
 
   function clearUploadStatus() {
     clearTimeout(uploadStatusTimer);
@@ -80,6 +81,31 @@ function initLanding() {
         if (uploadStatus) uploadStatus.textContent = "";
       }, autoClearMs);
     }
+  }
+
+  function clearSaveError() {
+    clearTimeout(saveErrorTimer);
+    if (saveError) saveError.textContent = "";
+  }
+
+  function setSaveError(msg: string, autoClearMs = 8000) {
+    clearTimeout(saveErrorTimer);
+    if (saveError) saveError.textContent = msg;
+    if (autoClearMs > 0 && msg) {
+      saveErrorTimer = setTimeout(() => {
+        if (saveError && saveError.textContent === msg) {
+          saveError.textContent = "";
+        }
+      }, autoClearMs);
+    }
+  }
+
+  if (saveError) {
+    saveError.addEventListener("click", clearSaveError);
+    saveError.addEventListener("touchend", (e) => {
+      e.preventDefault();
+      clearSaveError();
+    });
   }
 
   function closeTtlMenu() {
@@ -399,6 +425,7 @@ function initLanding() {
     draftDirty = false;
     textarea.value = "";
     clearUploadStatus();
+    clearSaveError();
     updateStats();
     showDraftStatus("");
     showPreviousDraft();
@@ -425,6 +452,7 @@ function initLanding() {
         textarea.value = previous;
         previousDraft = current;
         clearUploadStatus();
+        clearSaveError();
         try {
           if (current.trim() && draftPreference?.checked !== false)
             localStorage.setItem("px0_previous_draft", current);
@@ -472,6 +500,7 @@ function initLanding() {
               } catch {}
               if (textarea) textarea.value = "";
               clearUploadStatus();
+              clearSaveError();
               updateStats();
               showDraftStatus("");
               if (draftContainer) draftContainer.innerHTML = "";
@@ -562,7 +591,7 @@ function initLanding() {
 
   async function handleFilesUpload(files: File[]) {
     if (uploadInProgress) {
-      if (saveError) saveError.textContent = "Upload already in progress.";
+      setSaveError("Upload already in progress.");
       return;
     }
     if (!files.length) return;
@@ -570,7 +599,7 @@ function initLanding() {
     const thisDraftGen = currentDraftGen;
     uploadInProgress = true;
     if (btnUpload) btnUpload.disabled = true;
-    if (saveError) saveError.textContent = "";
+    clearSaveError();
     clearUploadStatus();
 
     let successfulUploads = 0;
@@ -588,9 +617,7 @@ function initLanding() {
 
         // 5 MiB client-side validation
         if (file.size > 5 * 1024 * 1024) {
-          if (saveError) {
-            saveError.textContent = `"${file.name || "Image"}" exceeds 5MB limit.`;
-          }
+          setSaveError(`"${file.name || "Image"}" exceeds 5MB limit.`);
           continue;
         }
 
@@ -599,6 +626,8 @@ function initLanding() {
         const allowedMimes = [
           "image/png",
           "image/jpeg",
+          "image/jpg",
+          "image/pjpeg",
           "image/webp",
           "image/gif",
         ];
@@ -607,9 +636,9 @@ function initLanding() {
           allowedExtensions.test(file.name);
 
         if (!isAllowed) {
-          if (saveError) {
-            saveError.textContent = `"${file.name || "File"}" is not a supported format (PNG, JPEG, WebP, GIF only).`;
-          }
+          setSaveError(
+            `"${file.name || "File"}" is not a supported format (PNG, JPEG, WebP, GIF only).`,
+          );
           continue;
         }
 
@@ -617,7 +646,7 @@ function initLanding() {
         formData.append("file", file, file.name || "image.png");
 
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 30000);
+        const timeout = setTimeout(() => controller.abort(), 12000);
 
         let res: Response;
         let data: { url?: string; error?: string };
@@ -633,10 +662,12 @@ function initLanding() {
           };
         } catch {
           clearTimeout(timeout);
-          if (thisDraftGen === currentDraftGen && saveError) {
-            saveError.textContent = controller.signal.aborted
-              ? `Upload timed out for "${file.name || "image"}".`
-              : `Network error uploading "${file.name || "image"}".`;
+          if (thisDraftGen === currentDraftGen) {
+            setSaveError(
+              controller.signal.aborted
+                ? "Image upload timed out. Catbox may be down."
+                : "Catbox image host is currently unreachable. Please try again later.",
+            );
           }
           break;
         } finally {
@@ -646,10 +677,10 @@ function initLanding() {
         if (thisDraftGen !== currentDraftGen) break;
 
         if (!res.ok || !data.url) {
-          if (saveError) {
-            saveError.textContent =
-              data.error || `Upload failed for "${file.name || "image"}".`;
-          }
+          setSaveError(
+            data.error ||
+              "Catbox image host is currently unreachable. Please try again later.",
+          );
           continue;
         }
 
@@ -681,7 +712,10 @@ function initLanding() {
       }
     } finally {
       uploadInProgress = false;
-      if (btnUpload) btnUpload.disabled = false;
+      if (btnUpload) {
+        btnUpload.disabled = false;
+        btnUpload.blur();
+      }
       if (imageInput) imageInput.value = "";
       if (thisDraftGen !== currentDraftGen) {
         clearUploadStatus();
@@ -700,11 +734,16 @@ function initLanding() {
 
   if (btnUpload && imageInput) {
     btnUpload.addEventListener("click", () => {
+      imageInput.value = "";
       imageInput.click();
+      setTimeout(() => {
+        if (btnUpload) btnUpload.blur();
+      }, 100);
     });
 
     imageInput.addEventListener("change", () => {
       const files = Array.from(imageInput.files || []);
+      imageInput.value = "";
       if (files.length > 0) {
         handleFilesUpload(files);
       }
@@ -825,34 +864,63 @@ function initLanding() {
 
       if (imageFiles.length === 0 && clipboardData.items) {
         for (const item of Array.from(clipboardData.items)) {
-          if (item.kind === "file" && item.type.startsWith("image/")) {
+          if (item.kind === "file") {
             const f = item.getAsFile();
-            if (f) imageFiles.push(f);
+            if (
+              f &&
+              (f.type.startsWith("image/") ||
+                /\.(png|jpe?g|webp|gif)$/i.test(f.name))
+            ) {
+              imageFiles.push(f);
+            }
           }
         }
       }
 
       if (imageFiles.length > 0) {
-        const text = clipboardData.getData("text/plain").trim();
-        const isFilenameOrUri =
-          Boolean(imageFiles[0].name) &&
-          (text === imageFiles[0].name ||
-            decodeURIComponent(text).endsWith(imageFiles[0].name) ||
-            text.startsWith("file://"));
+        e.preventDefault();
+        handleFilesUpload(imageFiles);
+        return;
+      }
+    });
 
-        if (
-          !text ||
-          isFilenameOrUri ||
-          !clipboardData.types.includes("text/plain")
-        ) {
+    textarea.addEventListener("beforeinput", (e: Event) => {
+      const inputEvent = e as InputEvent;
+      if (
+        (inputEvent.inputType === "insertFromPaste" ||
+          inputEvent.inputType === "insertReplacementText" ||
+          inputEvent.inputType === "insertFromDrop") &&
+        inputEvent.dataTransfer
+      ) {
+        const dtFiles = Array.from(inputEvent.dataTransfer.files || []);
+        const imgFiles = dtFiles.filter(
+          (f) =>
+            f.type.startsWith("image/") ||
+            /\.(png|jpe?g|webp|gif)$/i.test(f.name),
+        );
+        if (imgFiles.length === 0 && inputEvent.dataTransfer.items) {
+          for (const item of Array.from(inputEvent.dataTransfer.items)) {
+            if (item.kind === "file") {
+              const f = item.getAsFile();
+              if (
+                f &&
+                (f.type.startsWith("image/") ||
+                  /\.(png|jpe?g|webp|gif)$/i.test(f.name))
+              ) {
+                imgFiles.push(f);
+              }
+            }
+          }
+        }
+        if (imgFiles.length > 0) {
           e.preventDefault();
-          handleFilesUpload(imageFiles);
-          return;
+          handleFilesUpload(imgFiles);
         }
       }
     });
 
     textarea.addEventListener("input", () => {
+      clearSaveError();
       scheduleStats();
       scheduleDraftSave();
       if (draftContainer && !textarea.value.trim()) {

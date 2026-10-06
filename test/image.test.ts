@@ -351,7 +351,9 @@ describe("POST /api/image Endpoint", () => {
 
     expect(res.status).toBe(502);
     const json = (await res.json()) as { error: string };
-    expect(json.error).toContain("error");
+    expect(json.error).toBe(
+      "Catbox image host is currently unreachable. Please try again later.",
+    );
   });
 
   test("handles upstream malformed/arbitrary URL response with 502", async () => {
@@ -376,7 +378,7 @@ describe("POST /api/image Endpoint", () => {
     expect(json.error).toContain("Invalid image URL");
   });
 
-  test("handles upstream network error or timeout with 502/504", async () => {
+  test("handles upstream network error with 502", async () => {
     mockFetch(async () => {
       const err = new Error("Connection refused");
       throw err;
@@ -394,7 +396,44 @@ describe("POST /api/image Endpoint", () => {
       body: formData,
     });
     expect(res.status).toBe(502);
+    const json = (await res.json()) as { error: string };
+    expect(json.error).toBe(
+      "Catbox image host is currently unreachable. Please try again later.",
+    );
   });
+
+  test("handles upstream timeout with 504 Gateway Timeout", async () => {
+    mockFetch(async (_input, init) => {
+      return new Promise((_resolve, reject) => {
+        if (init?.signal?.aborted) {
+          const err = new Error("The operation was aborted");
+          err.name = "AbortError";
+          reject(err);
+        } else {
+          init?.signal?.addEventListener("abort", () => {
+            const err = new Error("The operation was aborted");
+            err.name = "AbortError";
+            reject(err);
+          });
+        }
+      });
+    });
+
+    const formData = new FormData();
+    formData.append(
+      "file",
+      new Blob([pngBytes as unknown as BlobPart], { type: "image/png" }),
+      "test.png",
+    );
+
+    const res = await app.request("/api/image", {
+      method: "POST",
+      body: formData,
+    });
+    expect(res.status).toBe(504);
+    const json = (await res.json()) as { error: string };
+    expect(json.error).toBe("Image upload timed out. Catbox may be down.");
+  }, 10000);
 
   test("rate limiter returns 429 after 20 image uploads per minute", async () => {
     mockFetch(async () => {
@@ -430,5 +469,10 @@ describe("POST /api/image Endpoint", () => {
     const res = await app.request("/");
     const csp = res.headers.get("Content-Security-Policy") || "";
     expect(csp).toContain("img-src 'self' data: https://files.catbox.moe");
+  });
+
+  test("GET /i/:file returns 404 since self-hosted image serving is disabled", async () => {
+    const res = await app.request("/i/testimage123.png");
+    expect(res.status).toBe(404);
   });
 });

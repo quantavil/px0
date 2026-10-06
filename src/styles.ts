@@ -265,12 +265,22 @@ export const BASE_CSS = `
     text-decoration: none;
     transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
     flex-shrink: 0;
+    -webkit-tap-highlight-color: transparent;
   }
 
-  .btn-action:hover {
-    color: var(--amber);
-    background: var(--amber-fill);
+  @media (hover: hover) and (pointer: fine) {
+    .btn-action:hover {
+      color: var(--amber);
+      background: var(--amber-fill);
+      border-color: transparent;
+    }
+  }
+
+  .btn-action:focus:not(:focus-visible) {
+    color: var(--text-dim);
+    background: transparent;
     border-color: transparent;
+    outline: none;
   }
 
   .btn-action:active { transform: scale(0.94); }
@@ -284,7 +294,8 @@ export const BASE_CSS = `
     pointer-events: none;
   }
 
-  .btn-action.active {
+  .btn-action.active,
+  .btn-action.active:focus:not(:focus-visible) {
     background: var(--amber-fill);
     border-color: var(--amber-line);
     color: var(--amber);
@@ -664,7 +675,7 @@ export const LANDING_CSS = `
   .util-right {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
+    gap: 0.6rem;
     position: relative;
   }
 
@@ -672,7 +683,7 @@ export const LANDING_CSS = `
     position: relative;
     display: inline-flex;
     align-items: center;
-    gap: 0.25rem;
+    gap: 0.35rem;
   }
 
   .btn-upload-info {
@@ -1276,13 +1287,28 @@ export const LANDING_CSS = `
   @media (max-width: 640px) {
     .util-strip {
       width: calc(100% - 1rem);
-      padding: 0 0.9rem;
+      padding: 0 0.75rem;
+      gap: 0.75rem;
+    }
+    .util-right {
+      gap: 1.25rem;
+      flex-shrink: 0;
+    }
+    .upload-control-group {
+      gap: 0.5rem;
+    }
+    .util-strip .btn-action {
+      width: 44px;
+      height: 44px;
+    }
+    .btn-upload-info {
+      width: 32px;
+      height: 32px;
     }
     .editor-container {
       width: calc(100% - 1rem);
       padding: 0 0.9rem;
     }
-
   }
 
   @media (max-width: 520px) {
@@ -1330,7 +1356,8 @@ export const LANDING_CSS = `
   .privacy-help label { display: flex; align-items: center; gap: 0.5rem; padding-bottom: 0.5rem; }
   #draftStatus { color: var(--text-muted); font-size: 0.72rem; }
   .seg-option .badge { opacity: 1; color: var(--text-muted); }
-  .save-error { white-space: normal; overflow: visible; }
+  .save-error { white-space: normal; overflow: visible; cursor: pointer; }
+  .save-error:hover { text-decoration: underline; }
   @media (pointer: coarse) {
     .btn-action, .util-strip .btn-action, .px-modal-close { width: 44px; height: 44px; }
     .seg-option .badge, .ttl-trigger { min-height: 44px; }

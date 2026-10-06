@@ -1,6 +1,21 @@
 import { devices, expect, test } from "@playwright/test";
 
+const ONE_BY_ONE_PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+  "base64",
+);
+
 test.describe("Catbox Image Upload & Integration", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.route("https://files.catbox.moe/**", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "image/png",
+        body: ONE_BY_ONE_PNG,
+      });
+    });
+  });
+
   test("selecting an image through the upload button uploads and inserts markdown link", async ({
     page,
   }) => {
@@ -376,6 +391,126 @@ test.describe("Catbox Image Upload & Integration", () => {
     await context.close();
   });
 
+  test("mobile preview toggles live markdown preview pane", async ({
+    browser,
+  }) => {
+    const context = await browser.newContext({ ...devices["Pixel 7"] });
+    const page = await context.newPage();
+    await page.goto("http://127.0.0.1:3005/");
+
+    const editor = page.locator("#content");
+    await editor.fill("# Mobile Heading\n\nSome body text.");
+
+    const btnSplit = page.locator("#btnSplit");
+    await btnSplit.click();
+
+    const previewPane = page.locator("#previewPane");
+    await expect(previewPane).toBeVisible();
+    await expect(editor).toBeVisible();
+    await expect(page.locator("#previewPane h1")).toHaveText("Mobile Heading");
+
+    // Tapping again closes preview
+    await btnSplit.click();
+    await expect(previewPane).toBeHidden();
+
+    await context.close();
+  });
+
+  test("selecting the same file consecutively triggers change and uploads both times", async ({
+    page,
+  }) => {
+    await page.goto("/");
+
+    let uploadCount = 0;
+    await page.route("**/api/image", async (route) => {
+      uploadCount++;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ url: `https://files.catbox.moe/samefile${uploadCount}.png` }),
+      });
+    });
+
+    const fileInput = page.locator("#imageInput");
+    const editor = page.locator("#content");
+
+    // 1st selection
+    await fileInput.setInputFiles({
+      name: "repeat.png",
+      mimeType: "image/png",
+      buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    });
+    await expect(editor).toHaveValue(/samefile1\.png/);
+    expect(uploadCount).toBe(1);
+
+    // 2nd selection of identical file (simulates retry or repeat upload)
+    await fileInput.setInputFiles({
+      name: "repeat.png",
+      mimeType: "image/png",
+      buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    });
+    await expect(editor).toHaveValue(/samefile2\.png/);
+    expect(uploadCount).toBe(2);
+  });
+
+  test("pasting clipboard image with arbitrary non-matching text in text/plain still uploads", async ({
+    page,
+  }) => {
+    await page.goto("/");
+
+    await page.route("**/api/image", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ url: "https://files.catbox.moe/arbitrarytext.png" }),
+      });
+    });
+
+    const editor = page.locator("#content");
+    await editor.focus();
+
+    await page.evaluate(() => {
+      const ta = document.getElementById("content") as HTMLTextAreaElement;
+      const dt = new DataTransfer();
+      const file = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], "image.png", {
+        type: "image/png",
+      });
+      dt.items.add(file);
+      // Arbitrary description / localized name / Gboard caption
+      dt.setData("text/plain", "Screenshot_2026-10-06_084315.png (1 item copied)");
+      ta.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true }));
+    });
+
+    await expect(editor).toHaveValue(/!\[image\]\(https:\/\/files\.catbox\.moe\/arbitrarytext\.png\)/);
+  });
+
+  test("clicking saveError dismisses the error banner immediately", async ({ page }) => {
+    await page.goto("/");
+
+    // Trigger an error by rejecting upload
+    await page.route("**/api/image", async (route) => {
+      await route.fulfill({
+        status: 504,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "Image upload timed out" }),
+      });
+    });
+
+    const fileInput = page.locator("#imageInput");
+    await fileInput.setInputFiles({
+      name: "fail.png",
+      mimeType: "image/png",
+      buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47]),
+    });
+
+    const saveError = page.locator("#saveError");
+    await expect(saveError).toHaveText("Image upload timed out");
+
+    // Click to dismiss
+    await saveError.click();
+    await expect(saveError).toHaveText("");
+  });
+
   test("landing page with image controls passes automated WCAG accessibility checks", async ({
     page,
   }) => {
@@ -385,3 +520,4 @@ test.describe("Catbox Image Upload & Integration", () => {
     expect(results.violations.map((v) => ({ id: v.id, nodes: v.nodes.map((n) => n.target) }))).toEqual([]);
   });
 });
+

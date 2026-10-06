@@ -267,6 +267,13 @@ try {
       assert.match(json.error, /Invalid image format/);
     },
   );
+  await check(
+    "/i/:file returns 404 as px0 does not host images directly",
+    async () => {
+      const response = await request("/i/nonexistent123.png");
+      assert.equal(response.status, 404);
+    },
+  );
   console.log(`${checks} Worker integration checks passed`);
 } finally {
   await worker.dispose();

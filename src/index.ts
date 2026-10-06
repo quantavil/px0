@@ -514,7 +514,7 @@ app.post("/api/image", async (c) => {
   );
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 15000);
+  const timeoutId = setTimeout(() => controller.abort(), 5000);
   const onClientAbort = () => controller.abort();
   if (c.req.raw.signal?.aborted) {
     controller.abort();
@@ -537,16 +537,31 @@ app.post("/api/image", async (c) => {
       return c.json({ error: "Client aborted upload" }, 400);
     }
     if (controller.signal.aborted) {
-      return c.json({ error: "Image upload timed out" }, 504);
+      return c.json(
+        { error: "Image upload timed out. Catbox may be down." },
+        504,
+      );
     }
-    return c.json({ error: "Failed to connect to image host" }, 502);
+    return c.json(
+      {
+        error:
+          "Catbox image host is currently unreachable. Please try again later.",
+      },
+      502,
+    );
   } finally {
     clearTimeout(timeoutId);
     c.req.raw.signal?.removeEventListener("abort", onClientAbort);
   }
 
   if (!upstreamRes.ok) {
-    return c.json({ error: "Upstream image host returned an error" }, 502);
+    return c.json(
+      {
+        error:
+          "Catbox image host is currently unreachable. Please try again later.",
+      },
+      502,
+    );
   }
 
   const text = (await upstreamRes.text()).trim();
