@@ -679,68 +679,6 @@ export const LANDING_CSS = `
     position: relative;
   }
 
-  .upload-control-group {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-  }
-
-  .btn-upload-info {
-    width: 24px;
-    height: 24px;
-    padding: 0;
-    opacity: 0.65;
-    transition: opacity 0.2s ease, color 0.2s ease;
-    -webkit-tap-highlight-color: transparent;
-  }
-
-  @media (hover: hover) and (pointer: fine) {
-    .btn-upload-info:hover {
-      opacity: 1;
-      color: var(--amber);
-    }
-  }
-
-  .btn-upload-info:focus-visible, .btn-upload-info.open {
-    opacity: 1;
-    color: var(--amber);
-  }
-
-  .image-popover {
-    position: absolute;
-    top: calc(100% + 0.4rem);
-    right: 0;
-    z-index: 60;
-    width: 290px;
-    max-width: min(290px, calc(100vw - 1.5rem));
-    box-sizing: border-box;
-    padding: 0.75rem 0.85rem;
-    background: var(--surface);
-    border: 1px solid var(--border-hover);
-    border-radius: var(--radius);
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.65);
-    font-size: 0.74rem;
-    line-height: 1.45;
-    color: var(--text-muted);
-  }
-
-  .image-popover[hidden] {
-    display: none;
-  }
-
-  .image-popover p {
-    margin: 0;
-  }
-
-  .image-popover p + p {
-    margin-top: 0.4rem;
-  }
-
-  .image-popover strong {
-    color: var(--amber);
-  }
-
   .upload-status {
     font-size: 0.75rem;
     font-family: var(--mono);
@@ -1317,9 +1255,6 @@ export const LANDING_CSS = `
     .util-right {
       gap: 1.25rem;
       flex-shrink: 0;
-    }
-    .upload-control-group {
-      gap: 0.5rem;
     }
     .util-strip .btn-action {
       width: 44px;

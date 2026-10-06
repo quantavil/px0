@@ -9,6 +9,7 @@ import {
   plusIcon,
 } from "../icons";
 import { ENC_PREFIX, MAX_PASTE_BYTES } from "../utils";
+import { compressImageToWebP } from "./image-compress";
 import { bytesToBase64Url, copyToClipboard, flashCopied } from "./shared";
 
 function initLanding() {
@@ -49,18 +50,9 @@ function initLanding() {
   const imageInput = document.getElementById(
     "imageInput",
   ) as HTMLInputElement | null;
-  const btnUploadInfo = document.getElementById(
-    "btnUploadInfo",
-  ) as HTMLButtonElement | null;
-  const imagePopover = document.getElementById(
-    "imagePopover",
-  ) as HTMLDivElement | null;
   const uploadStatus = document.getElementById(
     "uploadStatus",
   ) as HTMLSpanElement | null;
-  const uploadControlGroup = document.querySelector(
-    ".upload-control-group",
-  ) as HTMLElement | null;
   const saveError = document.getElementById(
     "saveError",
   ) as HTMLSpanElement | null;
@@ -646,13 +638,13 @@ function initLanding() {
 
         setUploadStatus(
           files.length > 1
-            ? `Uploading image ${i + 1}/${files.length}…`
-            : "Uploading image…",
+            ? `Compressing image ${i + 1}/${files.length}…`
+            : "Compressing image…",
         );
 
-        // 5 MiB client-side validation
-        if (file.size > 5 * 1024 * 1024) {
-          setSaveError(`"${file.name || "Image"}" exceeds 5MB limit.`);
+        // 10 MiB client-side validation guard
+        if (file.size > 10 * 1024 * 1024) {
+          setSaveError(`"${file.name || "Image"}" exceeds 10MB limit.`);
           continue;
         }
 
@@ -669,51 +661,18 @@ function initLanding() {
           continue;
         }
 
-        const formData = new FormData();
-        formData.append("file", file, file.name || "image.png");
-
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 25000);
-
-        let res: Response;
-        let data: { url?: string; error?: string };
+        let dataUrl: string;
         try {
-          res = await fetch("/api/image", {
-            method: "POST",
-            body: formData,
-            signal: controller.signal,
-          });
-          data = (await res.json().catch(() => ({}))) as {
-            url?: string;
-            error?: string;
-          };
-        } catch {
-          clearTimeout(timeout);
+          dataUrl = await compressImageToWebP(file);
+        } catch (err) {
+          console.error("Image compression error:", err);
           if (thisDraftGen === currentDraftGen) {
-            setSaveError(
-              controller.signal.aborted
-                ? "Image upload timed out. Catbox may be down."
-                : "Catbox image host is currently unreachable. Please try again later.",
-            );
+            setSaveError(`Failed to process "${file.name || "image"}".`);
           }
-          break;
-        } finally {
-          clearTimeout(timeout);
+          continue;
         }
 
         if (thisDraftGen !== currentDraftGen) break;
-
-        if (!res.ok || !data.url) {
-          setSaveError(
-            data.error ||
-              (res.status === 504
-                ? "Image upload timed out. Catbox may be down."
-                : res.status === 413
-                  ? "Image exceeds 5MB limit."
-                  : "Catbox image host is currently unreachable. Please try again later."),
-          );
-          continue;
-        }
 
         if (textarea) {
           const cleanName =
@@ -724,21 +683,45 @@ function initLanding() {
               .trim() || "image";
 
           const val = textarea.value;
+          let highestFig = 0;
+          const figMatches = val.matchAll(/\[fig-(\d+)\]/g);
+          for (const match of figMatches) {
+            const num = parseInt(match[1], 10);
+            if (num > highestFig) highestFig = num;
+          }
+          const figKey = `fig-${highestFig + 1}`;
+
           const start = textarea.selectionStart;
           const end = textarea.selectionEnd;
 
           const prefix = start > 0 && val[start - 1] !== "\n" ? "\n" : "";
           const suffix = end < val.length && val[end] === "\n" ? "" : "\n";
-          const mdLink = `${prefix}![${cleanName}](${data.url})${suffix}`;
+          const refLink = `${prefix}![${cleanName}][${figKey}]${suffix}`;
 
-          replaceText(start, end, mdLink);
+          const savedScrollTop = textarea.scrollTop;
+          replaceText(start, end, refLink);
+          const newCursor = textarea.selectionStart;
+
+          const valAfter = textarea.value;
+          const appendSep = valAfter.endsWith("\n\n")
+            ? ""
+            : valAfter.endsWith("\n")
+              ? "\n"
+              : valAfter.length === 0
+                ? ""
+                : "\n\n";
+          const refDef = `${appendSep}[${figKey}]: ${dataUrl}\n`;
+          replaceText(valAfter.length, valAfter.length, refDef);
+          textarea.setSelectionRange(newCursor, newCursor);
+          textarea.scrollTop = savedScrollTop;
+
           updateStats();
           scheduleDraftSave();
         }
 
         successfulUploads++;
         if (files.length > 1) {
-          setUploadStatus(`Uploaded ${successfulUploads}/${files.length}`);
+          setUploadStatus(`Added ${successfulUploads}/${files.length}`);
         }
       }
     } finally {
@@ -753,8 +736,8 @@ function initLanding() {
       } else if (successfulUploads > 0) {
         setUploadStatus(
           files.length > 1
-            ? `Uploaded ${successfulUploads}/${files.length}`
-            : "Image uploaded",
+            ? `Added ${successfulUploads}/${files.length}`
+            : "Image added",
           4000,
         );
       } else {
@@ -777,36 +760,6 @@ function initLanding() {
       imageInput.value = "";
       if (files.length > 0) {
         handleFilesUpload(files);
-      }
-    });
-  }
-
-  if (btnUploadInfo && imagePopover) {
-    btnUploadInfo.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const isOpen = !imagePopover.hidden;
-      imagePopover.hidden = isOpen;
-      btnUploadInfo.setAttribute("aria-expanded", String(!isOpen));
-      btnUploadInfo.classList.toggle("open", !isOpen);
-    });
-
-    document.addEventListener("click", (e) => {
-      if (
-        !imagePopover.hidden &&
-        !uploadControlGroup?.contains(e.target as Node)
-      ) {
-        imagePopover.hidden = true;
-        btnUploadInfo.setAttribute("aria-expanded", "false");
-        btnUploadInfo.classList.remove("open");
-      }
-    });
-
-    document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && !imagePopover.hidden) {
-        imagePopover.hidden = true;
-        btnUploadInfo.setAttribute("aria-expanded", "false");
-        btnUploadInfo.classList.remove("open");
-        btnUploadInfo.focus();
       }
     });
   }
@@ -874,7 +827,10 @@ function initLanding() {
         }
       }
 
-      const rawFiles = Array.from(e.dataTransfer?.files || []);
+      let rawFiles = Array.from(e.dataTransfer?.files || []);
+      if (rawFiles.length === 0 && e.dataTransfer) {
+        rawFiles = extractImageFiles(e.dataTransfer);
+      }
       if (rawFiles.length > 0) {
         handleFilesUpload(rawFiles);
       }

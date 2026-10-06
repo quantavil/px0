@@ -23,7 +23,6 @@ import {
   flameSvg,
   globeSvg,
   imageIcon,
-  infoIcon,
   lockIcon,
   plusIcon,
   rawIcon,
@@ -31,13 +30,6 @@ import {
   splitIcon,
   trashIcon,
 } from "./icons";
-import {
-  CATBOX_TIMEOUT_MS,
-  detectImageType,
-  imageRateLimitMap,
-  MAX_IMAGE_BYTES,
-  validateCatboxUrl,
-} from "./image";
 import { renderMarkdown } from "./server-renderer";
 import {
   ENC_PREFIX,
@@ -256,7 +248,7 @@ app.use("*", async (c, next) => {
   if (c.req.path !== "/") c.header("X-Robots-Tag", "noindex, nofollow");
   c.header(
     "Content-Security-Policy",
-    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://files.catbox.moe; frame-ancestors 'none';",
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none';",
   );
 });
 
@@ -347,19 +339,10 @@ app.get("/", (c) => {
               <span id="saveError" class="save-error" role="alert"></span>
             </div>
             <div class="util-right">
-              <div class="upload-control-group">
-                <button type="button" id="btnUpload" class="btn-action" title="Upload image — Public on Catbox (not encrypted)" aria-label="Upload image" aria-description="Images are public on Catbox.moe, including images linked inside encrypted pastes. Paste expiry, deletion and burn-after-read do not delete Catbox images. Images are not end-to-end encrypted.">
-                  ${raw(imageIcon)}
-                </button>
-                <input type="file" id="imageInput" accept="image/png,image/jpeg,image/webp,image/gif" multiple class="sr-only" tabindex="-1" aria-hidden="true">
-                <button type="button" id="btnUploadInfo" class="btn-action btn-upload-info" title="Image upload privacy note" aria-label="Image upload privacy note" aria-expanded="false" aria-controls="imagePopover">
-                  ${raw(infoIcon)}
-                </button>
-                <div id="imagePopover" class="image-popover" role="note" hidden>
-                  <p><strong>Images are public on Catbox.moe:</strong> Uploaded images are hosted publicly, including images linked inside encrypted pastes.</p>
-                  <p>Paste expiry, deletion, and burn-after-read do not delete Catbox images. Images are not end-to-end encrypted.</p>
-                </div>
-              </div>
+              <button type="button" id="btnUpload" class="btn-action" title="Upload image" aria-label="Upload image">
+                ${raw(imageIcon)}
+              </button>
+              <input type="file" id="imageInput" accept="image/png,image/jpeg,image/webp,image/gif" multiple class="sr-only" tabindex="-1" aria-hidden="true">
               <button type="button" id="btnSplit" class="btn-action" title="Toggle preview" aria-label="Toggle preview" aria-controls="previewPane" aria-pressed="false">
                 ${raw(splitIcon)}
               </button>
@@ -372,9 +355,8 @@ app.get("/", (c) => {
           </div>
 
           <details class="privacy-help">
-            <summary>Encryption, images &amp; local drafts</summary>
+            <summary>Encryption &amp; local drafts</summary>
             <p>Encrypted pastes need the complete link to read. Drafts are saved unencrypted on this device.</p>
-            <p><strong>Images:</strong> Uploaded images are hosted publicly on Catbox.moe, including images linked inside encrypted pastes. Paste expiry, deletion, and burn-after-read do not delete Catbox images. Images are not end-to-end encrypted.</p>
             <label><input type="checkbox" id="draftPreference" checked> Save drafts on this device</label>
           </details>
 
@@ -420,208 +402,6 @@ app.get("/", (c) => {
       </html>
     `,
   );
-});
-
-// Bound image uploads strictly to 5MB + 64KB for multipart boundary overhead.
-app.use(
-  "/api/image",
-  bodyLimit({
-    maxSize: MAX_IMAGE_BYTES + 64 * 1024,
-    onError: (c) => c.json({ error: "Image exceeds 5MB limit" }, 413),
-  }),
-);
-
-// Image Upload API (proxies to Catbox anonymously with strict validation)
-app.post("/api/image", async (c) => {
-  const clientIp = c.req.header("cf-connecting-ip") || "127.0.0.1";
-  if (isRateLimited(clientIp, 20, 60000, imageRateLimitMap)) {
-    return c.json(
-      { error: "Rate limit exceeded. Please try again later." },
-      429,
-    );
-  }
-
-  const contentLength = Number(c.req.header("content-length"));
-  if (contentLength && contentLength > MAX_IMAGE_BYTES + 64 * 1024) {
-    return c.json({ error: "Image exceeds 5MB limit" }, 413);
-  }
-
-  const rawContentType =
-    c.req.header("content-type")?.split(";")[0]?.trim().toLowerCase() ?? "";
-
-  let bytes: Uint8Array;
-
-  if (rawContentType === "multipart/form-data") {
-    let formData: FormData;
-    try {
-      formData = await c.req.formData();
-    } catch {
-      return c.json({ error: "Invalid form data" }, 400);
-    }
-    let file: Blob | null = null;
-    for (const key of ["file", "image", "fileToUpload"]) {
-      const val = formData.get(key);
-      if (val && typeof val !== "string" && (val as unknown) instanceof Blob) {
-        file = val as Blob;
-        break;
-      }
-    }
-    if (!file) {
-      for (const val of formData.values()) {
-        if (
-          val &&
-          typeof val !== "string" &&
-          (val as unknown) instanceof Blob
-        ) {
-          file = val as Blob;
-          break;
-        }
-      }
-    }
-    if (!file) {
-      return c.json({ error: "No image file provided" }, 400);
-    }
-    bytes = new Uint8Array(await file.arrayBuffer());
-  } else if (
-    rawContentType.startsWith("image/") ||
-    rawContentType === "application/octet-stream"
-  ) {
-    bytes = new Uint8Array(await c.req.arrayBuffer());
-  } else {
-    return c.json(
-      { error: "Content-Type must be multipart/form-data or image/*" },
-      415,
-    );
-  }
-
-  if (bytes.byteLength === 0) {
-    return c.json({ error: "Image file is empty" }, 400);
-  }
-
-  if (bytes.byteLength > MAX_IMAGE_BYTES) {
-    return c.json({ error: "Image exceeds 5MB limit" }, 413);
-  }
-
-  const format = detectImageType(bytes);
-  if (!format) {
-    return c.json(
-      {
-        error: "Invalid image format. Supported formats: PNG, JPEG, WebP, GIF.",
-      },
-      400,
-    );
-  }
-
-  const ext = format === "jpeg" ? "jpg" : format;
-  const mimeType =
-    format === "png"
-      ? "image/png"
-      : format === "jpeg"
-        ? "image/jpeg"
-        : format === "webp"
-          ? "image/webp"
-          : "image/gif";
-
-  const catboxFormData = new FormData();
-  catboxFormData.append("reqtype", "fileupload");
-
-  const userHash =
-    (c.env as { CATBOX_USERHASH?: string } | undefined)?.CATBOX_USERHASH ??
-    (typeof process !== "undefined" ? process.env?.CATBOX_USERHASH : undefined);
-  if (userHash && typeof userHash === "string" && userHash.trim()) {
-    catboxFormData.append("userhash", userHash.trim());
-  }
-
-  catboxFormData.append(
-    "fileToUpload",
-    new Blob([bytes as unknown as BlobPart], { type: mimeType }),
-    `image.${ext}`,
-  );
-
-  const timeoutMs = Math.max(
-    1,
-    Number(
-      (c.env as { CATBOX_TIMEOUT_MS?: string | number } | undefined)
-        ?.CATBOX_TIMEOUT_MS ??
-        (typeof process !== "undefined"
-          ? process.env?.CATBOX_TIMEOUT_MS
-          : undefined),
-    ) || CATBOX_TIMEOUT_MS,
-  );
-
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-  const onClientAbort = () => controller.abort();
-  if (c.req.raw.signal?.aborted) {
-    controller.abort();
-  } else {
-    c.req.raw.signal?.addEventListener("abort", onClientAbort);
-  }
-
-  let upstreamRes: Response;
-  try {
-    upstreamRes = await fetch("https://catbox.moe/user/api.php", {
-      method: "POST",
-      body: catboxFormData,
-      signal: controller.signal,
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-      },
-    });
-  } catch (err) {
-    if (typeof process === "undefined" || process.env.NODE_ENV !== "test") {
-      console.error("Catbox fetch thrown error:", err);
-    }
-    if (c.req.raw.signal?.aborted) {
-      return c.json({ error: "Client aborted upload" }, 400);
-    }
-    if (controller.signal.aborted) {
-      return c.json(
-        { error: "Image upload timed out. Catbox may be down." },
-        504,
-      );
-    }
-    return c.json(
-      {
-        error:
-          "Catbox image host is currently unreachable. Please try again later.",
-      },
-      502,
-    );
-  } finally {
-    clearTimeout(timeoutId);
-    c.req.raw.signal?.removeEventListener("abort", onClientAbort);
-  }
-
-  if (!upstreamRes.ok) {
-    const errorBody = await upstreamRes.text().catch(() => "");
-    if (typeof process === "undefined" || process.env.NODE_ENV !== "test") {
-      console.error(
-        "Catbox upstream non-ok status:",
-        upstreamRes.status,
-        errorBody,
-      );
-    }
-    return c.json(
-      {
-        error:
-          "Catbox image host is currently unreachable. Please try again later.",
-      },
-      502,
-    );
-  }
-
-  const text = (await upstreamRes.text()).trim();
-  const validUrl = validateCatboxUrl(text);
-  if (!validUrl) {
-    return c.json(
-      { error: "Invalid image URL received from upstream host" },
-      502,
-    );
-  }
-
-  return c.json({ url: validUrl }, 200);
 });
 
 // Bound wire bytes separately: JSON escaping can expand each content byte sixfold.

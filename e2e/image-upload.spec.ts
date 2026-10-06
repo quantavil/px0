@@ -5,173 +5,118 @@ const ONE_BY_ONE_PNG = Buffer.from(
   "base64",
 );
 
-test.describe("Catbox Image Upload & Integration", () => {
-  test.beforeEach(async ({ page }) => {
-    await page.route("https://files.catbox.moe/**", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "image/png",
-        body: ONE_BY_ONE_PNG,
-      });
-    });
-  });
-
-  test("selecting an image through the upload button uploads and inserts markdown link", async ({
+test.describe("Client-Side WebP Image Compression & Reference Link Insertion", () => {
+  test("selecting an image through the upload button compresses and inserts reference link and definition", async ({
     page,
   }) => {
     await page.goto("/");
-
-    // Mock /api/image so real Catbox service is never spammed
-    await page.route("**/api/image", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ url: "https://files.catbox.moe/cat123.png" }),
-      });
-    });
 
     const fileInput = page.locator("#imageInput");
     await fileInput.setInputFiles({
       name: "diagram.png",
       mimeType: "image/png",
-      buffer: Buffer.from([
-        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
-      ]),
+      buffer: ONE_BY_ONE_PNG,
     });
 
     const editor = page.locator("#content");
-    await expect(editor).toHaveValue(/!\[diagram\]\(https:\/\/files\.catbox\.moe\/cat123\.png\)/);
+    await expect(editor).toHaveValue(/!\[diagram\]\[fig-1\]/);
+    await expect(editor).toHaveValue(/\[fig-1\]: data:image\/(webp|jpeg);base64,/);
 
     // Verify it renders in live preview
     await page.locator("#btnSplit").click();
-    const previewImg = page.locator('#previewPane img[src="https://files.catbox.moe/cat123.png"]');
+    const previewImg = page.locator('#previewPane img[src^="data:image/"]');
     await expect(previewImg).toBeVisible();
 
     // Save and verify on saved viewer page
     await page.locator("#saveBtn").click();
     const pasteUrl = await page.locator("#pxPasteUrl").inputValue();
     await page.goto(pasteUrl);
-    const viewerImg = page.locator('#output img[src="https://files.catbox.moe/cat123.png"]');
+    const viewerImg = page.locator('#output img[src^="data:image/"]');
     await expect(viewerImg).toBeVisible();
   });
 
-  test("pasting clipboard image uploads and inserts markdown link; normal text paste is unaffected", async ({
+  test("pasting clipboard image compresses and inserts reference link; normal text paste is unaffected", async ({
     page,
   }) => {
     await page.goto("/");
 
-    let uploadCount = 0;
-    await page.route("**/api/image", async (route) => {
-      uploadCount++;
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ url: "https://files.catbox.moe/clip456.jpg" }),
-      });
-    });
-
     const editor = page.locator("#content");
     await editor.focus();
 
-    // 1. Normal text paste should paste text and NOT trigger image upload
+    // 1. Normal text paste should paste text and NOT trigger image compression
     await page.evaluate(() => {
       const ta = document.getElementById("content") as HTMLTextAreaElement;
       const dt = new DataTransfer();
       dt.setData("text/plain", "ordinary text snippet");
       ta.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true }));
     });
-    // In automated browser without native OS paste, simulate value or verify uploadCount is 0
-    expect(uploadCount).toBe(0);
+    await expect(editor).not.toHaveValue(/!\[/);
 
-    // 2. Image clipboard paste triggers upload
-    await page.evaluate(() => {
+    // 2. Image clipboard paste triggers local compression
+    await page.evaluate((pngBase64) => {
       const ta = document.getElementById("content") as HTMLTextAreaElement;
       const dt = new DataTransfer();
-      const file = new File([new Uint8Array([0xff, 0xd8, 0xff, 0xe0])], "clip.jpg", {
-        type: "image/jpeg",
-      });
+      const binary = atob(pngBase64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      const file = new File([bytes], "clip.png", { type: "image/png" });
       dt.items.add(file);
       ta.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true }));
-    });
+    }, ONE_BY_ONE_PNG.toString("base64"));
 
-    await expect(editor).toHaveValue(/!\[clip\]\(https:\/\/files\.catbox\.moe\/clip456\.jpg\)/);
-    expect(uploadCount).toBe(1);
+    await expect(editor).toHaveValue(/!\[clip\]\[fig-1\]/);
+    await expect(editor).toHaveValue(/\[fig-1\]: data:image\/(webp|jpeg);base64,/);
   });
 
-  test("dragging and dropping an image onto the editor uploads and inserts markdown link", async ({
+  test("dragging and dropping an image onto the editor compresses and inserts reference link", async ({
     page,
   }) => {
     await page.goto("/");
 
-    await page.route("**/api/image", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ url: "https://files.catbox.moe/drop789.webp" }),
-      });
-    });
-
-    await page.evaluate(() => {
+    await page.evaluate((pngBase64) => {
       const container = document.getElementById("editorContainer")!;
       const dt = new DataTransfer();
-      const file = new File([new Uint8Array([0x52, 0x49, 0x46, 0x46])], "artwork.webp", {
-        type: "image/webp",
-      });
+      const binary = atob(pngBase64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      const file = new File([bytes], "artwork.png", { type: "image/png" });
       dt.items.add(file);
       container.dispatchEvent(new DragEvent("drop", { dataTransfer: dt, bubbles: true }));
-    });
+    }, ONE_BY_ONE_PNG.toString("base64"));
 
     const editor = page.locator("#content");
-    await expect(editor).toHaveValue(/!\[artwork\]\(https:\/\/files\.catbox\.moe\/drop789\.webp\)/);
+    await expect(editor).toHaveValue(/!\[artwork\]\[fig-1\]/);
+    await expect(editor).toHaveValue(/\[fig-1\]: data:image\/(webp|jpeg);base64,/);
   });
 
-  test("uploading multiple files sequentially inserts links for all images", async ({ page }) => {
+  test("uploading multiple files sequentially inserts reference links for all images with unique fig keys", async ({
+    page,
+  }) => {
     await page.goto("/");
-
-    const uploadedUrls = [
-      "https://files.catbox.moe/img1.png",
-      "https://files.catbox.moe/img2.gif",
-    ];
-    let requestIndex = 0;
-
-    await page.route("**/api/image", async (route) => {
-      const url = uploadedUrls[requestIndex++] || "https://files.catbox.moe/fallback.png";
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ url }),
-      });
-    });
 
     const fileInput = page.locator("#imageInput");
     await fileInput.setInputFiles([
       {
         name: "pic1.png",
         mimeType: "image/png",
-        buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47]),
+        buffer: ONE_BY_ONE_PNG,
       },
       {
-        name: "pic2.gif",
-        mimeType: "image/gif",
-        buffer: Buffer.from([0x47, 0x49, 0x46, 0x38]),
+        name: "pic2.png",
+        mimeType: "image/png",
+        buffer: ONE_BY_ONE_PNG,
       },
     ]);
 
     const editor = page.locator("#content");
-    await expect(editor).toHaveValue(/!\[pic1\]\(https:\/\/files\.catbox\.moe\/img1\.png\)/);
-    await expect(editor).toHaveValue(/!\[pic2\]\(https:\/\/files\.catbox\.moe\/img2\.gif\)/);
+    await expect(editor).toHaveValue(/!\[pic1\]\[fig-1\]/);
+    await expect(editor).toHaveValue(/!\[pic2\]\[fig-2\]/);
+    await expect(editor).toHaveValue(/\[fig-1\]: data:image\/(webp|jpeg);base64,/);
+    await expect(editor).toHaveValue(/\[fig-2\]: data:image\/(webp|jpeg);base64,/);
   });
 
   test("native Undo restores content after image insertion", async ({ page }) => {
     await page.goto("/");
-
-    await page.route("**/api/image", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ url: "https://files.catbox.moe/undo.png" }),
-      });
-    });
 
     const editor = page.locator("#content");
     await editor.pressSequentially("Note before image");
@@ -180,129 +125,41 @@ test.describe("Catbox Image Upload & Integration", () => {
     await fileInput.setInputFiles({
       name: "shot.png",
       mimeType: "image/png",
-      buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47]),
+      buffer: ONE_BY_ONE_PNG,
     });
 
-    await expect(editor).toHaveValue(/https:\/\/files\.catbox\.moe\/undo\.png/);
+    await expect(editor).toHaveValue(/!\[shot\]\[fig-1\]/);
 
-    // Press Undo (ControlOrMeta+z) inside textarea
+    // Press Undo inside textarea (first undo removes reference definition, second removes link)
+    await editor.press("ControlOrMeta+z");
     await editor.press("ControlOrMeta+z");
     await expect(editor).toHaveValue("Note before image");
   });
 
-  test("upload failure preserves existing editor text and shows understandable error", async ({
+  test("oversized file exceeding 10MB shows understandable error and preserves editor text", async ({
     page,
   }) => {
     await page.goto("/");
-
-    await page.route("**/api/image", async (route) => {
-      await route.fulfill({
-        status: 502,
-        contentType: "application/json",
-        body: JSON.stringify({ error: "Failed to connect to image host" }),
-      });
-    });
 
     const editor = page.locator("#content");
     await editor.fill("Preserve this precious text");
 
     const fileInput = page.locator("#imageInput");
     await fileInput.setInputFiles({
-      name: "failed.png",
+      name: "huge.png",
       mimeType: "image/png",
-      buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47]),
+      buffer: Buffer.alloc(11 * 1024 * 1024),
     });
 
     // Error should be shown
     const saveError = page.locator("#saveError");
-    await expect(saveError).toContainText("Failed to connect to image host");
+    await expect(saveError).toContainText("exceeds 10MB limit");
 
-    // uploadStatus must NOT be stuck on "Uploading image…"
+    // uploadStatus must not be stuck on "Compressing image…"
     await expect(page.locator("#uploadStatus")).toHaveText("");
 
-    // Existing text must be 100% intact
+    // Existing text must be intact
     await expect(editor).toHaveValue("Preserve this precious text");
-  });
-
-  test("late upload responses do not modify a new/different draft and clear uploadStatus", async ({
-    page,
-  }) => {
-    await page.goto("/");
-
-    let fulfillUpload: (() => void) | null = null;
-    await page.route("**/api/image", async (route) => {
-      await new Promise<void>((resolve) => {
-        fulfillUpload = resolve;
-      });
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ url: "https://files.catbox.moe/late.png" }),
-      });
-    });
-
-    const editor = page.locator("#content");
-    await editor.fill("First draft text");
-
-    const fileInput = page.locator("#imageInput");
-    await fileInput.setInputFiles({
-      name: "late.png",
-      mimeType: "image/png",
-      buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47]),
-    });
-
-    // User starts a New Paste while upload is in flight
-    await page.locator('header a[title="New Paste"]').click();
-    await expect(editor).toHaveValue("");
-    await expect(page.locator("#uploadStatus")).toHaveText("");
-
-    // Now resolve the late upload
-    if (fulfillUpload) (fulfillUpload as () => void)();
-
-    await page.waitForTimeout(400);
-
-    // Editor should still be empty! Late response must not inject into the new draft
-    await expect(editor).toHaveValue("");
-    await expect(page.locator("#uploadStatus")).toHaveText("");
-  });
-
-  test("saving paste is blocked with warning while image upload is in progress", async ({
-    page,
-  }) => {
-    await page.goto("/");
-
-    let fulfillUpload: (() => void) | null = null;
-    await page.route("**/api/image", async (route) => {
-      await new Promise<void>((resolve) => {
-        fulfillUpload = resolve;
-      });
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ url: "https://files.catbox.moe/slow.png" }),
-      });
-    });
-
-    const editor = page.locator("#content");
-    await editor.fill("Draft awaiting image upload");
-
-    const fileInput = page.locator("#imageInput");
-    await fileInput.setInputFiles({
-      name: "slow.png",
-      mimeType: "image/png",
-      buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47]),
-    });
-
-    // Try to save before image upload completes
-    await page.locator("#saveBtn").click();
-
-    // Verify understandable warning is shown and paste was NOT submitted (no success modal)
-    await expect(page.locator("#saveError")).toContainText("Please wait for image upload to complete");
-    await expect(page.locator("#pxModalOverlay")).toBeHidden();
-
-    // Now resolve the upload
-    if (fulfillUpload) (fulfillUpload as () => void)();
-    await expect(editor).toHaveValue(/!\[slow\]\(https:\/\/files\.catbox\.moe\/slow\.png\)/);
   });
 
   test("dragging and dropping an unsupported file shows understandable error", async ({
@@ -324,69 +181,40 @@ test.describe("Catbox Image Upload & Integration", () => {
     await expect(saveError).toContainText("not a supported format");
   });
 
-  test("pasting clipboard image with auxiliary filename text in text/plain still uploads", async ({
+  test("pasting clipboard image with auxiliary filename text in text/plain still processes", async ({
     page,
   }) => {
     await page.goto("/");
-
-    await page.route("**/api/image", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ url: "https://files.catbox.moe/fromfilemanager.png" }),
-      });
-    });
 
     const editor = page.locator("#content");
     await editor.focus();
 
-    await page.evaluate(() => {
+    await page.evaluate((pngBase64) => {
       const ta = document.getElementById("content") as HTMLTextAreaElement;
       const dt = new DataTransfer();
-      const file = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], "screenshot.png", {
-        type: "image/png",
-      });
+      const binary = atob(pngBase64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      const file = new File([bytes], "screenshot.png", { type: "image/png" });
       dt.items.add(file);
       dt.setData("text/plain", "screenshot.png");
       ta.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true }));
-    });
+    }, ONE_BY_ONE_PNG.toString("base64"));
 
-    await expect(editor).toHaveValue(/!\[screenshot\]\(https:\/\/files\.catbox\.moe\/fromfilemanager\.png\)/);
+    await expect(editor).toHaveValue(/!\[screenshot\]\[fig-1\]/);
   });
 
-  test("privacy popover opens near upload control and explains Catbox public hosting", async ({
-    page,
-  }) => {
-    await page.goto("/");
-
-    const infoBtn = page.locator("#btnUploadInfo");
-    const popover = page.locator("#imagePopover");
-
-    await expect(popover).toBeHidden();
-    await infoBtn.click();
-    await expect(popover).toBeVisible();
-    await expect(popover).toContainText("publicly");
-    await expect(popover).toContainText("not end-to-end encrypted");
-    await expect(popover).toContainText("burn-after-read do not delete Catbox images");
-
-    // Pressing Escape closes it
-    await page.keyboard.press("Escape");
-    await expect(popover).toBeHidden();
-  });
-
-  test("mobile touch targets for image upload and info buttons are at least 44x44px", async ({
+  test("mobile touch target for image upload button is at least 44x44px", async ({
     browser,
   }) => {
     const context = await browser.newContext({ ...devices["iPhone 13"] });
     const page = await context.newPage();
     await page.goto("http://127.0.0.1:3005/");
 
-    for (const selector of ["#btnUpload", "#btnUploadInfo"]) {
-      const box = await page.locator(selector).boundingBox();
-      expect(box).not.toBeNull();
-      expect(box!.height).toBeGreaterThanOrEqual(44);
-      expect(box!.width).toBeGreaterThanOrEqual(44);
-    }
+    const box = await page.locator("#btnUpload").boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.height).toBeGreaterThanOrEqual(44);
+    expect(box!.width).toBeGreaterThanOrEqual(44);
 
     await context.close();
   });
@@ -416,20 +244,10 @@ test.describe("Catbox Image Upload & Integration", () => {
     await context.close();
   });
 
-  test("selecting the same file consecutively triggers change and uploads both times", async ({
+  test("selecting the same file consecutively triggers change and compresses both times", async ({
     page,
   }) => {
     await page.goto("/");
-
-    let uploadCount = 0;
-    await page.route("**/api/image", async (route) => {
-      uploadCount++;
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ url: `https://files.catbox.moe/samefile${uploadCount}.png` }),
-      });
-    });
 
     const fileInput = page.locator("#imageInput");
     const editor = page.locator("#content");
@@ -438,104 +256,79 @@ test.describe("Catbox Image Upload & Integration", () => {
     await fileInput.setInputFiles({
       name: "repeat.png",
       mimeType: "image/png",
-      buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      buffer: ONE_BY_ONE_PNG,
     });
-    await expect(editor).toHaveValue(/samefile1\.png/);
-    expect(uploadCount).toBe(1);
+    await expect(editor).toHaveValue(/!\[repeat\]\[fig-1\]/);
 
-    // 2nd selection of identical file (simulates retry or repeat upload)
+    // 2nd selection of identical file (retry or second insert)
     await fileInput.setInputFiles({
       name: "repeat.png",
       mimeType: "image/png",
-      buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      buffer: ONE_BY_ONE_PNG,
     });
-    await expect(editor).toHaveValue(/samefile2\.png/);
-    expect(uploadCount).toBe(2);
+    await expect(editor).toHaveValue(/!\[repeat\]\[fig-2\]/);
   });
 
-  test("pasting clipboard image with arbitrary non-matching text in text/plain still uploads", async ({
+  test("pasting clipboard image with arbitrary non-matching text in text/plain still processes", async ({
     page,
   }) => {
     await page.goto("/");
 
-    await page.route("**/api/image", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ url: "https://files.catbox.moe/arbitrarytext.png" }),
-      });
-    });
-
     const editor = page.locator("#content");
     await editor.focus();
 
-    await page.evaluate(() => {
+    await page.evaluate((pngBase64) => {
       const ta = document.getElementById("content") as HTMLTextAreaElement;
       const dt = new DataTransfer();
-      const file = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], "image.png", {
-        type: "image/png",
-      });
+      const binary = atob(pngBase64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      const file = new File([bytes], "image.png", { type: "image/png" });
       dt.items.add(file);
-      // Arbitrary description / localized name / Gboard caption
       dt.setData("text/plain", "Screenshot_2026-10-06_084315.png (1 item copied)");
       ta.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true }));
-    });
+    }, ONE_BY_ONE_PNG.toString("base64"));
 
-    await expect(editor).toHaveValue(/!\[image\]\(https:\/\/files\.catbox\.moe\/arbitrarytext\.png\)/);
+    await expect(editor).toHaveValue(/!\[image\]\[fig-1\]/);
   });
 
   test("clicking saveError dismisses the error banner immediately", async ({ page }) => {
     await page.goto("/");
 
-    // Trigger an error by rejecting upload
-    await page.route("**/api/image", async (route) => {
-      await route.fulfill({
-        status: 504,
-        contentType: "application/json",
-        body: JSON.stringify({ error: "Image upload timed out" }),
-      });
-    });
-
-    const fileInput = page.locator("#imageInput");
-    await fileInput.setInputFiles({
-      name: "fail.png",
-      mimeType: "image/png",
-      buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47]),
+    // Trigger an error by dropping unsupported file
+    await page.evaluate(() => {
+      const container = document.getElementById("editorContainer")!;
+      const dt = new DataTransfer();
+      const file = new File(["not an image"], "bad.pdf", { type: "application/pdf" });
+      dt.items.add(file);
+      container.dispatchEvent(new DragEvent("drop", { dataTransfer: dt, bubbles: true }));
     });
 
     const saveError = page.locator("#saveError");
-    await expect(saveError).toHaveText("Image upload timed out");
+    await expect(saveError).toContainText("not a supported format");
 
     // Click to dismiss
     await saveError.click();
     await expect(saveError).toHaveText("");
   });
 
-  test("beforeinput event with image dataTransfer triggers upload and inserts markdown", async ({
+  test("beforeinput event with image dataTransfer triggers compression and inserts markdown", async ({
     page,
   }) => {
     await page.goto("/");
 
-    await page.route("**/api/image", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ url: "https://files.catbox.moe/gboard_chip.png" }),
-      });
-    });
-
     const editor = page.locator("#content");
     await editor.focus();
 
-    await page.evaluate(() => {
+    await page.evaluate((pngBase64) => {
       const ta = document.getElementById("content") as HTMLTextAreaElement;
       const dt = new DataTransfer();
-      const file = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], "sticker.png", {
-        type: "image/png",
-      });
+      const binary = atob(pngBase64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      const file = new File([bytes], "sticker.png", { type: "image/png" });
       dt.items.add(file);
 
-      // Simulate Gboard inserting image via beforeinput
       const inputEvent = new CustomEvent("beforeinput", {
         bubbles: true,
         cancelable: true,
@@ -543,36 +336,28 @@ test.describe("Catbox Image Upload & Integration", () => {
       Object.defineProperty(inputEvent, "inputType", { value: "insertFromPaste" });
       Object.defineProperty(inputEvent, "dataTransfer", { value: dt });
       ta.dispatchEvent(inputEvent as unknown as Event);
-    });
+    }, ONE_BY_ONE_PNG.toString("base64"));
 
-    await expect(editor).toHaveValue(/!\[sticker\]\(https:\/\/files\.catbox\.moe\/gboard_chip\.png\)/);
+    await expect(editor).toHaveValue(/!\[sticker\]\[fig-1\]/);
   });
 
-  test("rapid duplicate paste and beforeinput events do not trigger 'Upload already in progress' error", async ({
+  test("rapid duplicate paste and beforeinput events do not trigger error", async ({
     page,
   }) => {
     await page.goto("/");
 
-    await page.route("**/api/image", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ url: "https://files.catbox.moe/rapid_paste.png" }),
-      });
-    });
-
     const editor = page.locator("#content");
     await editor.focus();
 
-    await page.evaluate(() => {
+    await page.evaluate((pngBase64) => {
       const ta = document.getElementById("content") as HTMLTextAreaElement;
       const dt = new DataTransfer();
-      const file = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], "shot.png", {
-        type: "image/png",
-      });
+      const binary = atob(pngBase64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      const file = new File([bytes], "shot.png", { type: "image/png" });
       dt.items.add(file);
 
-      // Fire paste then beforeinput immediately
       ta.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true }));
 
       const inputEvent = new CustomEvent("beforeinput", {
@@ -582,12 +367,9 @@ test.describe("Catbox Image Upload & Integration", () => {
       Object.defineProperty(inputEvent, "inputType", { value: "insertFromPaste" });
       Object.defineProperty(inputEvent, "dataTransfer", { value: dt });
       ta.dispatchEvent(inputEvent as unknown as Event);
-    });
+    }, ONE_BY_ONE_PNG.toString("base64"));
 
-    // Editor receives markdown link
-    await expect(editor).toHaveValue(/!\[shot\]\(https:\/\/files\.catbox\.moe\/rapid_paste\.png\)/);
-
-    // saveError should NOT contain "Upload already in progress."
+    await expect(editor).toHaveValue(/!\[shot\]\[fig-1\]/);
     const saveError = page.locator("#saveError");
     await expect(saveError).toHaveText("");
   });
@@ -598,7 +380,11 @@ test.describe("Catbox Image Upload & Integration", () => {
     const { default: AxeBuilder } = await import("@axe-core/playwright");
     await page.goto("/");
     const results = await new AxeBuilder({ page }).analyze();
-    expect(results.violations.map((v) => ({ id: v.id, nodes: v.nodes.map((n) => n.target) }))).toEqual([]);
+    expect(
+      results.violations.map((v) => ({
+        id: v.id,
+        nodes: v.nodes.map((n) => n.target),
+      })),
+    ).toEqual([]);
   });
 });
-
