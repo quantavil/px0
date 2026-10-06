@@ -524,6 +524,14 @@ app.post("/api/image", async (c) => {
 
   const catboxFormData = new FormData();
   catboxFormData.append("reqtype", "fileupload");
+
+  const userHash =
+    (c.env as { CATBOX_USERHASH?: string } | undefined)?.CATBOX_USERHASH ??
+    (typeof process !== "undefined" ? process.env?.CATBOX_USERHASH : undefined);
+  if (userHash && typeof userHash === "string" && userHash.trim()) {
+    catboxFormData.append("userhash", userHash.trim());
+  }
+
   catboxFormData.append(
     "fileToUpload",
     new Blob([bytes as unknown as BlobPart], { type: mimeType }),
@@ -557,10 +565,14 @@ app.post("/api/image", async (c) => {
       body: catboxFormData,
       signal: controller.signal,
       headers: {
-        "User-Agent": "px0/1.0",
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
       },
     });
-  } catch {
+  } catch (err) {
+    if (typeof process === "undefined" || process.env.NODE_ENV !== "test") {
+      console.error("Catbox fetch thrown error:", err);
+    }
     if (c.req.raw.signal?.aborted) {
       return c.json({ error: "Client aborted upload" }, 400);
     }
@@ -583,6 +595,14 @@ app.post("/api/image", async (c) => {
   }
 
   if (!upstreamRes.ok) {
+    const errorBody = await upstreamRes.text().catch(() => "");
+    if (typeof process === "undefined" || process.env.NODE_ENV !== "test") {
+      console.error(
+        "Catbox upstream non-ok status:",
+        upstreamRes.status,
+        errorBody,
+      );
+    }
     return c.json(
       {
         error:
