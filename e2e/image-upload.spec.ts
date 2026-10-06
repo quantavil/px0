@@ -511,6 +511,87 @@ test.describe("Catbox Image Upload & Integration", () => {
     await expect(saveError).toHaveText("");
   });
 
+  test("beforeinput event with image dataTransfer triggers upload and inserts markdown", async ({
+    page,
+  }) => {
+    await page.goto("/");
+
+    await page.route("**/api/image", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ url: "https://files.catbox.moe/gboard_chip.png" }),
+      });
+    });
+
+    const editor = page.locator("#content");
+    await editor.focus();
+
+    await page.evaluate(() => {
+      const ta = document.getElementById("content") as HTMLTextAreaElement;
+      const dt = new DataTransfer();
+      const file = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], "sticker.png", {
+        type: "image/png",
+      });
+      dt.items.add(file);
+
+      // Simulate Gboard inserting image via beforeinput
+      const inputEvent = new CustomEvent("beforeinput", {
+        bubbles: true,
+        cancelable: true,
+      }) as unknown as { inputType: string; dataTransfer: DataTransfer };
+      Object.defineProperty(inputEvent, "inputType", { value: "insertFromPaste" });
+      Object.defineProperty(inputEvent, "dataTransfer", { value: dt });
+      ta.dispatchEvent(inputEvent as unknown as Event);
+    });
+
+    await expect(editor).toHaveValue(/!\[sticker\]\(https:\/\/files\.catbox\.moe\/gboard_chip\.png\)/);
+  });
+
+  test("rapid duplicate paste and beforeinput events do not trigger 'Upload already in progress' error", async ({
+    page,
+  }) => {
+    await page.goto("/");
+
+    await page.route("**/api/image", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ url: "https://files.catbox.moe/rapid_paste.png" }),
+      });
+    });
+
+    const editor = page.locator("#content");
+    await editor.focus();
+
+    await page.evaluate(() => {
+      const ta = document.getElementById("content") as HTMLTextAreaElement;
+      const dt = new DataTransfer();
+      const file = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], "shot.png", {
+        type: "image/png",
+      });
+      dt.items.add(file);
+
+      // Fire paste then beforeinput immediately
+      ta.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true }));
+
+      const inputEvent = new CustomEvent("beforeinput", {
+        bubbles: true,
+        cancelable: true,
+      }) as unknown as { inputType: string; dataTransfer: DataTransfer };
+      Object.defineProperty(inputEvent, "inputType", { value: "insertFromPaste" });
+      Object.defineProperty(inputEvent, "dataTransfer", { value: dt });
+      ta.dispatchEvent(inputEvent as unknown as Event);
+    });
+
+    // Editor receives markdown link
+    await expect(editor).toHaveValue(/!\[shot\]\(https:\/\/files\.catbox\.moe\/rapid_paste\.png\)/);
+
+    // saveError should NOT contain "Upload already in progress."
+    const saveError = page.locator("#saveError");
+    await expect(saveError).toHaveText("");
+  });
+
   test("landing page with image controls passes automated WCAG accessibility checks", async ({
     page,
   }) => {

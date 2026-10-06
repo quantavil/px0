@@ -692,9 +692,17 @@ export const LANDING_CSS = `
     padding: 0;
     opacity: 0.65;
     transition: opacity 0.2s ease, color 0.2s ease;
+    -webkit-tap-highlight-color: transparent;
   }
 
-  .btn-upload-info:hover, .btn-upload-info:focus-visible, .btn-upload-info.open {
+  @media (hover: hover) and (pointer: fine) {
+    .btn-upload-info:hover {
+      opacity: 1;
+      color: var(--amber);
+    }
+  }
+
+  .btn-upload-info:focus-visible, .btn-upload-info.open {
     opacity: 1;
     color: var(--amber);
   }
@@ -850,15 +858,31 @@ export const LANDING_CSS = `
     cursor: pointer;
     white-space: nowrap;
     transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+    -webkit-tap-highlight-color: transparent;
   }
 
   .ttl-trigger svg { transition: transform 0.2s ease; }
   .ttl-trigger.open svg { transform: rotate(180deg); }
 
-  .ttl-trigger:hover, .ttl-trigger.open {
+  @media (hover: hover) and (pointer: fine) {
+    .ttl-trigger:hover {
+      background-color: var(--amber-fill);
+      border-color: var(--amber-line);
+      color: var(--amber);
+    }
+  }
+
+  .ttl-trigger.open {
     background-color: var(--amber-fill);
     border-color: var(--amber-line);
     color: var(--amber);
+  }
+
+  .ttl-trigger:focus:not(:focus-visible):not(.open) {
+    background-color: transparent;
+    border-color: var(--border);
+    color: var(--text-muted);
+    outline: none;
   }
 
   .ttl-menu {
@@ -1301,10 +1325,6 @@ export const LANDING_CSS = `
       width: 44px;
       height: 44px;
     }
-    .btn-upload-info {
-      width: 32px;
-      height: 32px;
-    }
     .editor-container {
       width: calc(100% - 1rem);
       padding: 0 0.9rem;
@@ -1356,12 +1376,19 @@ export const LANDING_CSS = `
   .privacy-help label { display: flex; align-items: center; gap: 0.5rem; padding-bottom: 0.5rem; }
   #draftStatus { color: var(--text-muted); font-size: 0.72rem; }
   .seg-option .badge { opacity: 1; color: var(--text-muted); }
-  .save-error { white-space: normal; overflow: visible; cursor: pointer; }
+  .save-error {
+    white-space: normal;
+    overflow: visible;
+    cursor: pointer;
+    line-height: 1.4;
+    padding: 0.15rem 0;
+  }
   .save-error:hover { text-decoration: underline; }
   @media (pointer: coarse) {
     .btn-action, .util-strip .btn-action, .px-modal-close { width: 44px; height: 44px; }
     .seg-option .badge, .ttl-trigger { min-height: 44px; }
     .privacy-help summary, .draft-discard { min-height: 44px; display: inline-flex; align-items: center; }
+    .save-error { min-height: 32px; display: inline-flex; align-items: center; }
   }
 
 `;

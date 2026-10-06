@@ -588,14 +588,49 @@ function initLanding() {
   }
 
   let uploadInProgress = false;
+  let lastUploadStartTime = 0;
+
+  function extractImageFiles(dt: DataTransfer | null | undefined): File[] {
+    if (!dt) return [];
+    const imageFiles: File[] = [];
+    const isImage = (f: File | null): f is File =>
+      Boolean(
+        f &&
+          (f.type.startsWith("image/") ||
+            /\.(png|jpe?g|webp|gif)$/i.test(f.name)),
+      );
+
+    if (dt.files && dt.files.length > 0) {
+      for (const f of Array.from(dt.files)) {
+        if (isImage(f)) imageFiles.push(f);
+      }
+    }
+
+    if (imageFiles.length === 0 && dt.items && dt.items.length > 0) {
+      for (const item of Array.from(dt.items)) {
+        if (item.kind === "file" || item.type.startsWith("image/")) {
+          const f = item.getAsFile();
+          if (f && (isImage(f) || item.type.startsWith("image/"))) {
+            imageFiles.push(f);
+          }
+        }
+      }
+    }
+    return imageFiles;
+  }
 
   async function handleFilesUpload(files: File[]) {
     if (uploadInProgress) {
+      if (Date.now() - lastUploadStartTime < 1000) {
+        // Silently debounce rapid duplicate events (e.g. beforeinput right after paste)
+        return;
+      }
       setSaveError("Upload already in progress.");
       return;
     }
     if (!files.length) return;
 
+    lastUploadStartTime = Date.now();
     const thisDraftGen = currentDraftGen;
     uploadInProgress = true;
     if (btnUpload) btnUpload.disabled = true;
@@ -628,6 +663,8 @@ function initLanding() {
           "image/jpeg",
           "image/jpg",
           "image/pjpeg",
+          "image/x-png",
+          "image/jfif",
           "image/webp",
           "image/gif",
         ];
@@ -852,66 +889,17 @@ function initLanding() {
 
   if (textarea) {
     textarea.addEventListener("paste", (e) => {
-      const clipboardData = e.clipboardData;
-      if (!clipboardData) return;
-
-      const rawFiles = Array.from(clipboardData.files || []);
-      const imageFiles = rawFiles.filter(
-        (f) =>
-          f.type.startsWith("image/") ||
-          /\.(png|jpe?g|webp|gif)$/i.test(f.name),
-      );
-
-      if (imageFiles.length === 0 && clipboardData.items) {
-        for (const item of Array.from(clipboardData.items)) {
-          if (item.kind === "file") {
-            const f = item.getAsFile();
-            if (
-              f &&
-              (f.type.startsWith("image/") ||
-                /\.(png|jpe?g|webp|gif)$/i.test(f.name))
-            ) {
-              imageFiles.push(f);
-            }
-          }
-        }
-      }
-
-      if (imageFiles.length > 0) {
+      const imgFiles = extractImageFiles(e.clipboardData);
+      if (imgFiles.length > 0) {
         e.preventDefault();
-        handleFilesUpload(imageFiles);
-        return;
+        handleFilesUpload(imgFiles);
       }
     });
 
     textarea.addEventListener("beforeinput", (e: Event) => {
       const inputEvent = e as InputEvent;
-      if (
-        (inputEvent.inputType === "insertFromPaste" ||
-          inputEvent.inputType === "insertReplacementText" ||
-          inputEvent.inputType === "insertFromDrop") &&
-        inputEvent.dataTransfer
-      ) {
-        const dtFiles = Array.from(inputEvent.dataTransfer.files || []);
-        const imgFiles = dtFiles.filter(
-          (f) =>
-            f.type.startsWith("image/") ||
-            /\.(png|jpe?g|webp|gif)$/i.test(f.name),
-        );
-        if (imgFiles.length === 0 && inputEvent.dataTransfer.items) {
-          for (const item of Array.from(inputEvent.dataTransfer.items)) {
-            if (item.kind === "file") {
-              const f = item.getAsFile();
-              if (
-                f &&
-                (f.type.startsWith("image/") ||
-                  /\.(png|jpe?g|webp|gif)$/i.test(f.name))
-              ) {
-                imgFiles.push(f);
-              }
-            }
-          }
-        }
+      if (inputEvent.dataTransfer) {
+        const imgFiles = extractImageFiles(inputEvent.dataTransfer);
         if (imgFiles.length > 0) {
           e.preventDefault();
           handleFilesUpload(imgFiles);
@@ -996,10 +984,7 @@ function initLanding() {
       e.preventDefault();
       if (isSubmitting || form.inert || !textarea || !e2eeToggle) return;
       if (uploadInProgress) {
-        if (saveError) {
-          saveError.textContent =
-            "Please wait for image upload to complete before saving.";
-        }
+        setSaveError("Please wait for image upload to complete before saving.");
         return;
       }
 
@@ -1017,11 +1002,11 @@ function initLanding() {
 
       const fail = (msg: string) => {
         isSubmitting = false;
-        if (saveError) saveError.textContent = msg;
+        setSaveError(msg);
         setSaveBusy(null);
       };
 
-      if (saveError) saveError.textContent = "";
+      clearSaveError();
       if (!textarea.value.trim()) {
         fail("Nothing to save — the editor is empty.");
         textarea.focus();
